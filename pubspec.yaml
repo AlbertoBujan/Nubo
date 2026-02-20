@@ -39,4 +39,4 @@ flutter_launcher_icons:
   ios: false
   image_path: "assets/icon/nubo_icon.png"
   adaptive_icon_background: "assets/icon/nubo_background.png"
-  adaptive_icon_foreground: "assets/icon/nubo.png"
+  adaptive_icon_foreground: "assets/icon/nubo_icon.png"
