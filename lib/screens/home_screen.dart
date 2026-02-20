@@ -156,42 +156,35 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Botón hamburguesa y texto de actualización en columna
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _TopBarButton(
-                    icon: Icons.menu,
-                    tooltip: 'Menú',
-                    onTap: () => Scaffold.of(context).openDrawer(),
-                  ),
-                  if (provider.lastRefreshText.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6.0, left: 10.0), // Alinea icono Lucide con las rayas de la hamburguesa (Container width 36 / 2 - icon size)
-                      child: Row(
-                        children: [
-                          const Icon(LucideIcons.clock, size: 12, color: Colors.white70),
-                          const SizedBox(width: 4),
-                          Text(
-                            provider.lastRefreshText,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-              // Botón de refrescar
+              // Botón hamburguesa
               _TopBarButton(
-                icon: Icons.refresh,
-                tooltip: 'Refrescar',
-                onTap: () => provider.refreshCurrentWeather(),
+                icon: Icons.menu,
+                tooltip: 'Menú',
+                onTap: () => Scaffold.of(context).openDrawer(),
               ),
+              
+              // Texto de última actualización (derecha)
+              if (provider.lastRefreshText.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10.0, right: 8.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(LucideIcons.clock, size: 12, color: Colors.white70),
+                      const SizedBox(width: 4),
+                      Text(
+                        provider.lastRefreshText,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                const SizedBox(width: 36), // Espacio placeholder para mantener el centro equilibrado
             ],
           ),
 
