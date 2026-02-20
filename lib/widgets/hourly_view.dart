@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/hourly_forecast.dart';
 import '../models/weather_enums.dart';
 
@@ -37,13 +38,19 @@ class HourlyView extends StatelessWidget {
       children: [
         const Padding(
           padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
-          child: Text(
-            'Predicción por horas',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Row(
+            children: [
+              Icon(LucideIcons.clock, color: Colors.white70, size: 18),
+              SizedBox(width: 6),
+              Text(
+                'Predicción por horas',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
         SizedBox(
