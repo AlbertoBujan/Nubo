@@ -6,6 +6,7 @@ import '../widgets/alert_box.dart';
 import '../widgets/hourly_view.dart';
 import '../widgets/daily_view.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/search_location_sheet.dart';
 import '../services/update_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:lottie/lottie.dart';
@@ -119,13 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         Expanded(
           child: provider.savedLocations.isEmpty
-              ? Center(
-                  child: Lottie.asset(
-                    'assets/lottie/sun_animation.json',
-                    width: 120,
-                    height: 120,
-                  ),
-                )
+              ? _buildWelcomeState(context)
               : PageView.builder(
                   controller: _pageController,
                   itemCount: provider.savedLocations.length,
@@ -143,6 +138,63 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWelcomeState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Lottie.asset(
+              'assets/lottie/sun_animation.json',
+              width: 150,
+              height: 150,
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              '¡Bienvenido a Nubo!',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Para empezar a disfrutar del tiempo con datos de la AEMET, añade tu primera ubicación.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 16, height: 1.4),
+            ),
+            const SizedBox(height: 48),
+            ElevatedButton.icon(
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const SearchLocationSheet(),
+                ).then((_) {
+                  if (context.mounted) {
+                    context.read<WeatherProvider>().clearSearch();
+                  }
+                });
+              },
+              icon: const Icon(Icons.add_location_alt_outlined),
+              label: const Text('Añadir Ubicación'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

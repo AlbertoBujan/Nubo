@@ -219,13 +219,8 @@ class WeatherProvider extends ChangeNotifier {
         .whereType<SavedLocation>()
         .toList();
 
-    // Si no hay ninguna guardada, añadir Madrid por defecto
-    if (_savedLocations.isEmpty) {
-      _savedLocations = [
-        SavedLocation(municipioId: '28079', nombre: 'Madrid'),
-      ];
-      await _persistLocations();
-    }
+    // Ya no añadimos Madrid por defecto. La lista puede estar vacía.
+
 
     _currentIndex = 0;
 
@@ -396,12 +391,7 @@ class WeatherProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('weather_data_$id');
 
-    // Si quedó vacío, añadir Madrid por defecto
-    if (_savedLocations.isEmpty) {
-      _savedLocations = [
-        SavedLocation(municipioId: '28079', nombre: 'Madrid'),
-      ];
-    }
+    // Si quedó vacío, no añadimos Madrid por defecto.
 
     // Ajustar índice si es necesario
     if (_currentIndex >= _savedLocations.length) {
