@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/daily_forecast.dart';
@@ -32,6 +33,7 @@ class WeatherProvider extends ChangeNotifier {
       ({
         List<DailyForecast> daily,
         List<HourlyForecast> hourly,
+        DateTime lastUpdated,
       })> _cache = {};
 
   // --- Estado de carga por página ---
@@ -110,6 +112,21 @@ class WeatherProvider extends ChangeNotifier {
     return _closestHourly(forecasts).skyDescription;
   }
 
+  /// Fecha de la última actualización para la ciudad activa
+  DateTime? get lastUpdated => _cache[currentMunicipioId]?.lastUpdated;
+
+  /// Texto amigable de última actualización (ej: "Hace 5 min")
+  String get lastRefreshText {
+    final updated = lastUpdated;
+    if (updated == null) return '';
+    
+    final diff = DateTime.now().difference(updated);
+    if (diff.inDays >= 1) return 'Hace ${diff.inDays} d';
+    if (diff.inHours >= 1) return 'Hace ${diff.inHours} h';
+    if (diff.inMinutes >= 1) return 'Hace ${diff.inMinutes} min';
+    return 'Actualizado'; // Menos de 1 minuto
+  }
+
   /// Temperaturas máxima y mínima del día actual.
   (int?, int?) get todayTempRange {
     final forecasts = dailyForecasts;
@@ -170,10 +187,16 @@ class WeatherProvider extends ChangeNotifier {
     }
 
     _currentIndex = 0;
+
+    // Intentar recuperar los datos en caché de las localizaciones
+    await _loadPersistedWeatherData();
+
     notifyListeners();
 
-    // Cargar datos para la localización inicial
-    await loadWeather(_savedLocations[0].municipioId);
+    // No disparamos de forma automática la carga con loadWeather.
+    // Solo mostramos lo que había en caché. Si está vacío, el usuario usará el botón.
+    // Sin embargo, si hemos actualizado el page view, notificaremos al fondo
+    await _updateSunPhase();
   }
 
   // ---------------------------------------------------------------------------
@@ -198,14 +221,22 @@ class WeatherProvider extends ChangeNotifier {
         _apiService.fetchHourlyForecast(municipioId),
       ]);
 
+      final dailyList = DailyForecast.fromAemetJson(results[0]);
+      final hourlyList = HourlyForecast.fromAemetJson(results[1]);
+      final updatedTime = DateTime.now();
+
       _cache[municipioId] = (
-        daily: DailyForecast.fromAemetJson(results[0]),
-        hourly: HourlyForecast.fromAemetJson(results[1]),
+        daily: dailyList,
+        hourly: hourlyList,
+        lastUpdated: updatedTime,
       );
       _errorMap[municipioId] = null;
 
       // Cargar alertas en paralelo (no bloquea la UI si falla)
       _loadAlerts(municipioId);
+
+      // Persistir en memoria física al terminar la descarga API
+      await _persistWeatherData(municipioId, results[0], results[1], updatedTime);
 
       // Actualizar fase solar
       await _updateSunPhase();
@@ -303,7 +334,7 @@ class WeatherProvider extends ChangeNotifier {
     }
     notifyListeners();
 
-    // Cargar datos en background
+    // Cargar datos por primera vez explícitamente porque es ubicación nueva
     await loadWeather(loc.municipioId);
   }
 
@@ -316,6 +347,10 @@ class WeatherProvider extends ChangeNotifier {
     _cache.remove(id);
     _errorMap.remove(id);
     _loadingMap.remove(id);
+
+    // Eliminar también la persistencia en disco de estos datos
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('weather_data_$id');
 
     // Si quedó vacío, añadir Madrid por defecto
     if (_savedLocations.isEmpty) {
@@ -332,8 +367,9 @@ class WeatherProvider extends ChangeNotifier {
     await _persistLocations();
     notifyListeners();
 
-    // Cargar datos si la caché no existe para la nueva ciudad activa
-    await loadWeather(currentMunicipioId);
+    // Si pasamos a otra no forzamos la carga. Simplemente actualiza la UI
+    // con lo que sea que tenga en su caché (o pide que la cargue el form vacío).
+    await _updateSunPhase();
   }
 
   /// Cambia la página activa (llamado desde el PageView onPageChanged).
@@ -342,9 +378,13 @@ class WeatherProvider extends ChangeNotifier {
     _currentIndex = index;
     notifyListeners();
 
-    // Cargar datos si aún no están en caché
+    // Verificamos si hay alertas por cargar y si fase solar cambió, 
+    // pero omitimos loadWeather porque dependemos del refresco manual
     final id = _savedLocations[index].municipioId;
-    await loadWeather(id);
+    if (!_alertsCache.containsKey(id)) {
+        _loadAlerts(id);
+    }
+    await _updateSunPhase();
   }
 
   // ---------------------------------------------------------------------------
@@ -399,12 +439,58 @@ class WeatherProvider extends ChangeNotifier {
     return closest;
   }
 
+  // ---------------------------------------------------------------------------
+  // Persistencia de caché
+  // ---------------------------------------------------------------------------
+
   Future<void> _persistLocations() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(
       _prefsKey,
       _savedLocations.map((l) => l.toPrefsString()).toList(),
     );
+  }
+
+  Future<void> _persistWeatherData(
+      String municipioId, 
+      List<dynamic> rawDaily, 
+      List<dynamic> rawHourly,
+      DateTime updateTime,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final dataString = jsonEncode({
+      'daily': rawDaily,
+      'hourly': rawHourly,
+      'lastUpdated': updateTime.toIso8601String(),
+    });
+    await prefs.setString('weather_data_$municipioId', dataString);
+  }
+
+  Future<void> _loadPersistedWeatherData() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    for (var loc in _savedLocations) {
+      final key = 'weather_data_${loc.municipioId}';
+      final jsonStr = prefs.getString(key);
+      
+      if (jsonStr != null) {
+        try {
+          final Map<String, dynamic> decoded = jsonDecode(jsonStr);
+          final daily = DailyForecast.fromAemetJson(decoded['daily']);
+          final hourly = HourlyForecast.fromAemetJson(decoded['hourly']);
+          final updated = DateTime.parse(decoded['lastUpdated']);
+          
+          _cache[loc.municipioId] = (
+            daily: daily,
+            hourly: hourly,
+            lastUpdated: updated,
+          );
+        } catch (_) {
+          // Si el JSON está malformado o es de otra versión, se borra.
+          prefs.remove(key);
+        }
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

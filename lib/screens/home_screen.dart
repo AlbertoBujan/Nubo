@@ -6,6 +6,7 @@ import '../widgets/alert_box.dart';
 import '../widgets/hourly_view.dart';
 import '../widgets/daily_view.dart';
 import '../widgets/app_drawer.dart';
+import '../services/update_service.dart';
 
 /// Pantalla principal de la aplicación meteorológica.
 ///
@@ -25,6 +26,48 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    _checkForUpdates();
+  }
+
+  Future<void> _checkForUpdates() async {
+    final updateService = GithubUpdateService();
+    final result = await updateService.checkForUpdates();
+
+    if (result['isAvailable'] == true && mounted) {
+      _showUpdateDialog(result['version'], result['downloadUrl']);
+    }
+  }
+
+  void _showUpdateDialog(String newVersion, String downloadUrl) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E2A3A),
+          title: const Text('¡Nueva Actualización!', style: TextStyle(color: Colors.white)),
+          content: Text(
+            'Una nueva versión (v$newVersion) de Nubo está disponible. '
+            '¿Deseas descargarla ahora e instalarla?',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(), // Cierra el diálogo y lo omite temporalmente
+              child: const Text('Más tarde', style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                GithubUpdateService().launchDownload(downloadUrl);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700),
+              child: const Text('Actualizar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -145,11 +188,28 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Botón de refrescar
-          _TopBarButton(
-            icon: Icons.refresh,
-            tooltip: 'Refrescar',
-            onTap: () => provider.refreshCurrentWeather(),
+          // Texto de última actualización y Botón de refrescar
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (provider.lastRefreshText.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Text(
+                    provider.lastRefreshText,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              _TopBarButton(
+                icon: Icons.refresh,
+                tooltip: 'Refrescar',
+                onTap: () => provider.refreshCurrentWeather(),
+              ),
+            ],
           ),
         ],
       ),
@@ -236,8 +296,45 @@ class _WeatherPageState extends State<_WeatherPage> {
           return _buildErrorState(provider);
         }
 
+        // Si no está cargando, no hay error, pero tampoco hay datos
+        if (provider.dailyForecasts.isEmpty || provider.hourlyForecasts.isEmpty) {
+          return _buildNoDataState(provider);
+        }
+
         return _buildContent(provider);
       },
+    );
+  }
+
+  Widget _buildNoDataState(WeatherProvider provider) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cloud_off, size: 64, color: Colors.white54),
+          const SizedBox(height: 16),
+          Text(
+            'Sin datos para ${provider.cityName}',
+            style: const TextStyle(color: Colors.white, fontSize: 18),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Toca para obtener el tiempo actual',
+            style: TextStyle(color: Colors.white54, fontSize: 14),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => provider.refreshCurrentWeather(),
+            icon: const Icon(Icons.cloud_download),
+            label: const Text('Descargar Datos'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
