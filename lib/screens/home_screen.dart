@@ -450,71 +450,76 @@ class _WeatherPageState extends State<_WeatherPage> {
     final hourlyForecasts = provider.hourlyForecastsFor(widget.municipioId);
     final dailyForecasts = provider.dailyForecastsFor(widget.municipioId);
 
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        children: [
-          // --- Nombre de la ciudad ---
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.location_on, color: Colors.white54, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  cityName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
+    return RefreshIndicator(
+      onRefresh: () => provider.refreshWeather(widget.municipioId),
+      backgroundColor: const Color(0xFF1E2A3A),
+      color: Colors.white,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          children: [
+            // --- Nombre de la ciudad ---
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.location_on, color: Colors.white54, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    cityName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          // --- Información principal del tiempo (sin icono grande) ---
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(
-              children: [
-                Text(
-                  currentTemp != null ? '$currentTemp°' : '--°',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 72,
-                    fontWeight: FontWeight.w200,
-                    height: 1,
+            // --- Información principal del tiempo (sin icono grande) ---
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                children: [
+                  Text(
+                    currentTemp != null ? '$currentTemp°' : '--°',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 72,
+                      fontWeight: FontWeight.w200,
+                      height: 1,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  skyDesc.isNotEmpty ? skyDesc : weather.description,
-                  style: const TextStyle(color: Colors.white70, fontSize: 18),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Máx: ${tempRange.$1 ?? '--'}°  Mín: ${tempRange.$2 ?? '--'}°',
-                  style: const TextStyle(color: Colors.white54, fontSize: 15),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    skyDesc.isNotEmpty ? skyDesc : weather.description,
+                    style: const TextStyle(color: Colors.white70, fontSize: 18),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Máx: ${tempRange.$1 ?? '--'}°  Mín: ${tempRange.$2 ?? '--'}°',
+                    style: const TextStyle(color: Colors.white54, fontSize: 15),
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // --- Alertas meteorológicas (si las hay) ---
-          AlertBox(alerts: alerts),
+            // --- Alertas meteorológicas (si las hay) ---
+            AlertBox(alerts: alerts),
 
-          // --- Caja 1: Pronóstico por horas ---
-          HourlyView(forecasts: hourlyForecasts),
+            // --- Caja 1: Pronóstico por horas ---
+            HourlyView(forecasts: hourlyForecasts),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-          // --- Caja 2: Pronóstico por días (scroll horizontal interno) ---
-          DailyView(forecasts: dailyForecasts),
+            // --- Caja 2: Pronóstico por días (scroll horizontal interno) ---
+            DailyView(forecasts: dailyForecasts),
 
-          const SizedBox(height: 20),
-        ],
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }

@@ -43,18 +43,6 @@ jobs:
            KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
            ALIAS: ${{ secrets.ALIAS }}
 
-      # Decodificar el keystore (si se subió como base64 secret)
-      # Nota: El ejemplo usaba ilharp/sign-android-release que firma DESPUÉS del build.
-      # Flutter build apk --release intenta firmar DURANTE el build si está configurado en build.gradle.
-      # Para simplificar y seguir el ejemplo original que firma el APK (lo cual es más flexible si no se quiere tocar el build.gradle),
-      # usaremos el flutter build apk sin firmar (o debug) y luego firmaremos? NO.
-      # Flutter release build por defecto requiere firma configurada en gradle o genera app-release-unsigned.apk (antiguo) o falla.
-      # Mejor enfoque moderno: Buildear release y dejar que gradle/flutter use las variables de entorno o propiedades.
-      # PERO, el usuario pidió ADAPTAR el ejemplo que usaba `ilharp/sign-android-release`.
-      # Ese action toma un APK no firmado y lo firma.
-      # Flutter `flutter build apk --release` fallará si no hay config de firma en build.gradle? No, genera un apk release firmado con debug key o unsigned warning.
-      # Vamos a usar el enfoque del ejemplo: compilar y luego firmar con el action.
-
       - name: Compilar APK de Release
         run: flutter build apk --release --no-shrink
 
