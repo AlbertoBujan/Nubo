@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'dart:io';
 
 class GithubUpdateService {
   // Ajustar nombre de usuario y repo 
@@ -57,11 +61,52 @@ class GithubUpdateService {
     return {'isAvailable': false};
   }
 
-  /// Lanza el enlace de descarga en el navegador por defecto
+  /// Lanza el enlace de descarga en el navegador por defecto (fallback)
   Future<void> launchDownload(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  /// Descarga el APK usando Dio y reportando progreso, luego intenta instalarlo.
+  Future<void> downloadAndInstallUpdate(
+    String url,
+    void Function(double progress) onProgress,
+  ) async {
+    try {
+      // 1. Obtener directorio local
+      final tempDir = await getTemporaryDirectory();
+      final filePath = '${tempDir.path}/nubo_update.apk';
+
+      // 2. Descargar archivo
+      final dio = Dio();
+      await dio.download(
+        url,
+        filePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            final progress = received / total;
+            onProgress(progress);
+          }
+        },
+      );
+
+      // 3. Abrir e instalar APK
+      if (Platform.isAndroid) {
+        final result = await OpenFilex.open(filePath);
+        if (result.type != ResultType.done) {
+          debugPrint('No se pudo abrir el instalador: ${result.message}');
+          // Si falla, abrir en navegador como fallback
+          await launchDownload(url);
+        }
+      } else {
+        // En iOS u otras plataformas abrimos la URL en navegador
+        await launchDownload(url);
+      }
+    } catch (e) {
+      debugPrint('Error descargando actualización: $e');
+      await launchDownload(url); // Fallback en caso de error
     }
   }
 

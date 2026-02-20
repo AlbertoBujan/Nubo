@@ -42,32 +42,85 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showUpdateDialog(String newVersion, String downloadUrl) {
+    bool isDownloading = false;
+    double downloadProgress = 0.0;
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1E2A3A),
-          title: const Text('¡Nueva Actualización!', style: TextStyle(color: Colors.white)),
-          content: Text(
-            'Una nueva versión (v$newVersion) de Nubo está disponible. '
-            '¿Deseas descargarla ahora e instalarla?',
-            style: const TextStyle(color: Colors.white70),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(), // Cierra el diálogo y lo omite temporalmente
-              child: const Text('Más tarde', style: TextStyle(color: Colors.white54)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                GithubUpdateService().launchDownload(downloadUrl);
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700),
-              child: const Text('Actualizar', style: TextStyle(color: Colors.white)),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E2A3A),
+              title: const Text('¡Nueva Actualización!', style: TextStyle(color: Colors.white)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!isDownloading)
+                    Text(
+                      'Una nueva versión (v$newVersion) de Nubo está disponible. '
+                      '¿Deseas descargarla e instalarla ahora?',
+                      style: const TextStyle(color: Colors.white70),
+                    )
+                  else ...[
+                    const Text(
+                      'Descargando actualización...',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(
+                      value: downloadProgress,
+                      backgroundColor: Colors.white24,
+                      color: Colors.blue.shade400,
+                      minHeight: 8,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${(downloadProgress * 100).toStringAsFixed(1)}%',
+                      style: const TextStyle(color: Colors.white54, fontSize: 13),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                if (!isDownloading) ...[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(), // Cierra el diálogo y lo omite temporalmente
+                    child: const Text('Más tarde', style: TextStyle(color: Colors.white54)),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        isDownloading = true;
+                      });
+                      
+                      GithubUpdateService().downloadAndInstallUpdate(
+                        downloadUrl,
+                        (progress) {
+                          setState(() {
+                            downloadProgress = progress;
+                          });
+                          
+                          if (progress >= 1.0) {
+                            // Cerrar el diálogo cuando termine la descarga
+                            // El servicio se encargará de abrir el APK
+                            Navigator.of(context).pop();
+                          }
+                        },
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700),
+                    child: const Text('Actualizar', style: TextStyle(color: Colors.white)),
+                  ),
+                ] else
+                  // Durante la descarga opcionalmente podrías añadir un botón de "Cancelar", 
+                  // pero por simplicidad ocultamos los botones mientras descarga.
+                  const SizedBox.shrink(),
+              ],
+            );
+          },
         );
       },
     );
