@@ -181,7 +181,7 @@ class WeatherProvider extends ChangeNotifier {
     // Si no hay ninguna guardada, añadir Madrid por defecto
     if (_savedLocations.isEmpty) {
       _savedLocations = [
-        const SavedLocation(municipioId: '28079', nombre: 'Madrid'),
+        SavedLocation(municipioId: '28079', nombre: 'Madrid'),
       ];
       await _persistLocations();
     }
@@ -355,7 +355,7 @@ class WeatherProvider extends ChangeNotifier {
     // Si quedó vacío, añadir Madrid por defecto
     if (_savedLocations.isEmpty) {
       _savedLocations = [
-        const SavedLocation(municipioId: '28079', nombre: 'Madrid'),
+        SavedLocation(municipioId: '28079', nombre: 'Madrid'),
       ];
     }
 

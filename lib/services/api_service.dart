@@ -37,19 +37,35 @@ class AemetApiService {
   /// Método privado que implementa el flujo de dos pasos de la API de AEMET.
   ///
   /// PASO 1: Petición al endpoint con el token api_key en los headers.
-  ///         La respuesta contiene un JSON con "estado", "datos" (url temporal), etc.
+  ///         Se incluye lógica de reintento exponencial para mitigar códigos 429 (Too Many Requests).
   ///
   /// PASO 2: GET a la URL temporal (sin token) para obtener el JSON final.
   Future<List<dynamic>> _fetchAemetData(String endpoint) async {
     // --- PASO 1: Solicitar la URL temporal ---
-    final response1 = await _client.get(
-      Uri.parse(endpoint),
-      headers: {'api_key': _apiKey},
-    );
+    
+    http.Response? response1;
+    const int maxRetries = 3;
+    int retryDelayMillis = 1500; // Empezamos esperando 1.5s antes del 1º reintento
 
-    if (response1.statusCode != 200) {
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
+      response1 = await _client.get(
+        Uri.parse(endpoint),
+        headers: {'api_key': _apiKey},
+      );
+
+      // Si tenemos éxito (200), o no es un error de rate-limit (429), rompemos el bucle
+      if (response1.statusCode != 429 || attempt == maxRetries) {
+        break;
+      }
+      
+      // Si es 429 y aún quedan intentos, esperamos antes de reintentar (Backoff exponencial)
+      await Future.delayed(Duration(milliseconds: retryDelayMillis));
+      retryDelayMillis *= 2; // Siguiente reintento tarda el doble (3s, luego 6s...)
+    }
+
+    if (response1!.statusCode != 200) {
       throw AemetApiException(
-        'Error en paso 1: código ${response1.statusCode}',
+        'Error de sobrecarga. Código ${response1.statusCode}',
         response1.statusCode,
       );
     }

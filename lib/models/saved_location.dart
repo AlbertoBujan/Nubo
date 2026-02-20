@@ -3,7 +3,26 @@ class SavedLocation {
   final String municipioId;
   final String nombre;
 
-  const SavedLocation({required this.municipioId, required this.nombre});
+  SavedLocation({required this.municipioId, required String nombre})
+      : nombre = _formatNombre(nombre);
+
+  /// AEMET devuelve nombres como "Coruña, A" o "Bañeza, La".
+  /// Esto lo detecta y lo reordena a "A Coruña" o "La Bañeza".
+  static String _formatNombre(String rawName) {
+    if (!rawName.contains(', ')) return rawName;
+    
+    // Si contiene una coma y un espacio, asume formato "Nombre, Artículo"
+    final parts = rawName.split(', ');
+    if (parts.length == 2) {
+      final article = parts[1].trim();
+      final name = parts[0].trim();
+      // Heurística básica: Si lo que hay después de la coma es corto (un artículo), se da la vuelta
+      if (article.length <= 4) {
+        return '$article $name';
+      }
+    }
+    return rawName;
+  }
 
   /// Serialización a String para SharedPreferences.
   /// Formato: "municipioId|nombre"
