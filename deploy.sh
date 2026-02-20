@@ -3,6 +3,10 @@
 # Asegurar que el script se detenga si hay errores
 set -e
 
+# Deshabilitar el helper de credenciales problemático del editor y pedir autenticación por consola/sistema si fuera necesario
+unset GIT_ASKPASS
+unset SSH_ASKPASS
+
 echo "=== Script de Despliegue de Nubo ==="
 
 # 1. Mensaje de commit por defecto
