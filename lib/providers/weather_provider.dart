@@ -522,11 +522,13 @@ class WeatherProvider extends ChangeNotifier {
 
     if (now.isAfter(sunriseStart) && now.isBefore(sunriseEnd)) {
       newPhase = SunPhase.sunrise;
-    } else if (now.isAfter(sunriseEnd) && now.isBefore(sunsetStart)) {
-      newPhase = SunPhase.day;
     } else if (now.isAfter(sunsetStart) && now.isBefore(sunsetEnd)) {
       newPhase = SunPhase.sunset;
+    } else if (now.compareTo(sunriseEnd) >= 0 && now.compareTo(sunsetStart) <= 0) {
+      // Es estrictamente después de que termina el amanecer y antes de que empiece el atardecer
+      newPhase = SunPhase.day;
     } else {
+      // Todo lo demás pertenece a la noche
       newPhase = SunPhase.night;
     }
 
@@ -553,13 +555,13 @@ class WeatherProvider extends ChangeNotifier {
           stops: [0.0, 0.4, 0.8, 1.0],
         );
       case SunPhase.day:
-        // Azul celeste vibrante a azul claro
+        // Azul cielo brillante pero contrastado
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF4CA1AF), 
-            Color(0xFFC4E0E5), 
+            Color(0xFF0F5298), // Índigo intenso
+            Color(0xFF3C99DC), // Azul cielo claro
           ],
         );
       case SunPhase.sunset:

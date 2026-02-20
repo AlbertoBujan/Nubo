@@ -7,6 +7,7 @@ import '../widgets/hourly_view.dart';
 import '../widgets/daily_view.dart';
 import '../widgets/app_drawer.dart';
 import '../services/update_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Pantalla principal de la aplicación meteorológica.
 ///
@@ -145,18 +146,57 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildTopBar(BuildContext context, WeatherProvider provider) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Row(
+      child: Stack(
+        alignment: Alignment.topCenter,
         children: [
-          // Botón hamburguesa → abre el drawer
-          _TopBarButton(
-            icon: Icons.menu,
-            tooltip: 'Menú',
-            onTap: () => Scaffold.of(context).openDrawer(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Botón hamburguesa y texto de actualización en columna
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _TopBarButton(
+                    icon: Icons.menu,
+                    tooltip: 'Menú',
+                    onTap: () => Scaffold.of(context).openDrawer(),
+                  ),
+                  if (provider.lastRefreshText.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6.0, left: 10.0), // Alinea icono Lucide con las rayas de la hamburguesa (Container width 36 / 2 - icon size)
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.clock, size: 12, color: Colors.white70),
+                          const SizedBox(width: 4),
+                          Text(
+                            provider.lastRefreshText,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              // Botón de refrescar
+              _TopBarButton(
+                icon: Icons.refresh,
+                tooltip: 'Refrescar',
+                onTap: () => provider.refreshCurrentWeather(),
+              ),
+            ],
           ),
 
-          // Dots de navegación centrados
-          Expanded(
+          // Dots de navegación centrados de manera absoluta
+          SizedBox(
+            height: 36, // Misma altura que el IconButton
             child: Row(
+              mainAxisSize: MainAxisSize.min, // Contrae el Row a su contenido exacto
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
                 provider.savedLocations.length,
@@ -186,30 +226,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-          ),
-
-          // Texto de última actualización y Botón de refrescar
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (provider.lastRefreshText.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: Text(
-                    provider.lastRefreshText,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              _TopBarButton(
-                icon: Icons.refresh,
-                tooltip: 'Refrescar',
-                onTap: () => provider.refreshCurrentWeather(),
-              ),
-            ],
           ),
         ],
       ),
