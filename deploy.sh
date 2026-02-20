@@ -8,13 +8,14 @@ echo "=== Script de Despliegue de Nubo ==="
 # 1. Mensaje de commit por defecto
 COMMIT_MSG="Deploy - $(date +'%Y-%m-%d %H:%M:%S')"
 
-# 2. Pedir la versión (tag) para la release (ejemplo: v1.0.0)
-read -p "Introduce la versión para la release (ejemplo: v1.0.0, empezando por 'v'): " VERSION_TAG
+# 2. Tomar la versión automáticamente del pubspec.yaml (Asegura formato "vX.X.X")
+# Busca la línea de version: y extrae solo el número.
+APP_VERSION=$(grep '^version: ' pubspec.yaml | sed 's/version: //')
 
-if [[ ! "$VERSION_TAG" =~ ^v ]]; then
-  echo "Error: La versión debe empezar por 'v' para lanzar el action release.yml (ejemplo: v1.0.0)"
-  exit 1
-fi
+# Añade la 'v' inicial requerida por el GitHub Action (ej. v0.1.0)
+VERSION_TAG="v$APP_VERSION"
+
+echo "Versión extraída de pubspec.yaml: $VERSION_TAG"
 
 # Nos aseguramos de ejecutar los comandos de git en el directorio raíz del repositorio de GitHub correctamante.
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
