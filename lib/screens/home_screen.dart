@@ -135,6 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     return _WeatherPage(
                       municipioId: loc.municipioId,
                       pageIndex: index,
+                      pageController: _pageController,
                     );
                   },
                 ),
@@ -286,8 +287,13 @@ class _HomeScreenState extends State<HomeScreen> {
 class _WeatherPage extends StatefulWidget {
   final String municipioId;
   final int pageIndex;
+  final PageController pageController;
 
-  const _WeatherPage({required this.municipioId, required this.pageIndex});
+  const _WeatherPage({
+    required this.municipioId,
+    required this.pageIndex,
+    required this.pageController,
+  });
 
   @override
   State<_WeatherPage> createState() => _WeatherPageState();
@@ -298,31 +304,46 @@ class _WeatherPageState extends State<_WeatherPage> {
   Widget build(BuildContext context) {
     return Consumer<WeatherProvider>(
       builder: (context, provider, _) {
-        final isActive = provider.currentIndex == widget.pageIndex;
+        final isLoading = provider.isLoadingFor(widget.municipioId);
+        final errorMessage = provider.errorMessageFor(widget.municipioId);
+        final daily = provider.dailyForecastsFor(widget.municipioId);
+        final hourly = provider.hourlyForecastsFor(widget.municipioId);
+        final cityName = provider.cityNameFor(widget.municipioId);
 
-        if (!isActive) {
-          return const SizedBox.shrink();
+        Widget content;
+        if (isLoading) {
+          content = _buildLoadingState(cityName);
+        } else if (errorMessage != null) {
+          content = _buildErrorState(provider);
+        } else if (daily.isEmpty || hourly.isEmpty) {
+          content = _buildNoDataState(provider, cityName);
+        } else {
+          content = _buildContent(provider, cityName);
         }
 
-        if (provider.isLoading) {
-          return _buildLoadingState(provider.cityName);
-        }
+        return AnimatedBuilder(
+          animation: widget.pageController,
+          builder: (context, child) {
+            double page = widget.pageIndex.toDouble();
+            if (widget.pageController.position.haveDimensions) {
+              page = widget.pageController.page ?? page;
+            }
+            // Mapeamos la distancia desde la página actual a una opacidad
+            final double distance = (page - widget.pageIndex).abs();
+            final double opacity = (1 - distance).clamp(0.0, 1.0);
 
-        if (provider.errorMessage != null) {
-          return _buildErrorState(provider);
-        }
-
-        // Si no está cargando, no hay error, pero tampoco hay datos
-        if (provider.dailyForecasts.isEmpty || provider.hourlyForecasts.isEmpty) {
-          return _buildNoDataState(provider);
-        }
-
-        return _buildContent(provider);
+            return Opacity(
+              opacity: opacity,
+              child: child,
+            );
+          },
+          child: content,
+        );
       },
     );
   }
 
-  Widget _buildNoDataState(WeatherProvider provider) {
+  Widget _buildNoDataState(WeatherProvider provider, String cityName) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -330,7 +351,7 @@ class _WeatherPageState extends State<_WeatherPage> {
           const Icon(Icons.cloud_off, size: 64, color: Colors.white54),
           const SizedBox(height: 16),
           Text(
-            'Sin datos para ${provider.cityName}',
+            'Sin datos para $cityName',
             style: const TextStyle(color: Colors.white, fontSize: 18),
           ),
           const SizedBox(height: 8),
@@ -340,7 +361,7 @@ class _WeatherPageState extends State<_WeatherPage> {
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () => provider.refreshCurrentWeather(),
+            onPressed: () => provider.refreshWeather(widget.municipioId),
             icon: const Icon(Icons.cloud_download),
             label: const Text('Descargar Datos'),
             style: ElevatedButton.styleFrom(
@@ -395,7 +416,7 @@ class _WeatherPageState extends State<_WeatherPage> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(
-              provider.errorMessage ?? 'Error desconocido',
+              provider.errorMessageFor(widget.municipioId) ?? 'Error desconocido',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white54, fontSize: 14),
             ),
@@ -404,7 +425,7 @@ class _WeatherPageState extends State<_WeatherPage> {
         const SizedBox(height: 24),
         Center(
           child: ElevatedButton.icon(
-            onPressed: () => provider.refreshCurrentWeather(),
+            onPressed: () => provider.refreshWeather(widget.municipioId),
             icon: const Icon(Icons.refresh),
             label: const Text('Reintentar'),
             style: ElevatedButton.styleFrom(
@@ -421,9 +442,15 @@ class _WeatherPageState extends State<_WeatherPage> {
     );
   }
 
-  Widget _buildContent(WeatherProvider provider) {
-    final tempRange = provider.todayTempRange;
-    final weather = WeatherCode.fromCode(provider.currentSkyCode);
+  Widget _buildContent(WeatherProvider provider, String cityName) {
+    final tempRange = provider.todayTempRangeFor(widget.municipioId);
+    final skyCode = provider.currentSkyCodeFor(widget.municipioId);
+    final weather = WeatherCode.fromCode(skyCode);
+    final currentTemp = provider.currentTemperatureFor(widget.municipioId);
+    final skyDesc = provider.currentSkyDescriptionFor(widget.municipioId);
+    final alerts = provider.alertsFor(widget.municipioId);
+    final hourlyForecasts = provider.hourlyForecastsFor(widget.municipioId);
+    final dailyForecasts = provider.dailyForecastsFor(widget.municipioId);
 
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -438,7 +465,7 @@ class _WeatherPageState extends State<_WeatherPage> {
                 const Icon(Icons.location_on, color: Colors.white54, size: 16),
                 const SizedBox(width: 4),
                 Text(
-                  provider.cityName,
+                  cityName,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 22,
@@ -455,9 +482,7 @@ class _WeatherPageState extends State<_WeatherPage> {
             child: Column(
               children: [
                 Text(
-                  provider.currentTemperature != null
-                      ? '${provider.currentTemperature}°'
-                      : '--°',
+                  currentTemp != null ? '$currentTemp°' : '--°',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 72,
@@ -467,9 +492,7 @@ class _WeatherPageState extends State<_WeatherPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  provider.currentSkyDescription.isNotEmpty
-                      ? provider.currentSkyDescription
-                      : weather.description,
+                  skyDesc.isNotEmpty ? skyDesc : weather.description,
                   style: const TextStyle(color: Colors.white70, fontSize: 18),
                 ),
                 const SizedBox(height: 4),
@@ -482,15 +505,15 @@ class _WeatherPageState extends State<_WeatherPage> {
           ),
 
           // --- Alertas meteorológicas (si las hay) ---
-          AlertBox(alerts: provider.alerts),
+          AlertBox(alerts: alerts),
 
           // --- Caja 1: Pronóstico por horas ---
-          HourlyView(forecasts: provider.hourlyForecasts),
+          HourlyView(forecasts: hourlyForecasts),
 
           const SizedBox(height: 8),
 
           // --- Caja 2: Pronóstico por días (scroll horizontal interno) ---
-          DailyView(forecasts: provider.dailyForecasts),
+          DailyView(forecasts: dailyForecasts),
 
           const SizedBox(height: 20),
         ],

@@ -142,6 +142,47 @@ class WeatherProvider extends ChangeNotifier {
     return (forecasts.first.tempMax, forecasts.first.tempMin);
   }
 
+  // --- Getters por municipioId (para animaciones suaves) ---
+  bool isLoadingFor(String id) => _loadingMap[id] ?? false;
+  String? errorMessageFor(String id) => _errorMap[id];
+  List<DailyForecast> dailyForecastsFor(String id) => _cache[id]?.daily ?? [];
+  List<HourlyForecast> hourlyForecastsFor(String id) => _cache[id]?.hourly ?? [];
+  List<WeatherAlert> alertsFor(String id) => _alertsCache[id] ?? [];
+
+  int? currentTemperatureFor(String id) {
+    if (hourlyForecastsFor(id).isEmpty) return null;
+    return _closestHourly(hourlyForecastsFor(id)).temperature;
+  }
+
+  String currentSkyCodeFor(String id) {
+    if (hourlyForecastsFor(id).isEmpty) return '';
+    return _closestHourly(hourlyForecastsFor(id)).skyStateCode;
+  }
+
+  String currentSkyDescriptionFor(String id) {
+    if (hourlyForecastsFor(id).isEmpty) return '';
+    return _closestHourly(hourlyForecastsFor(id)).skyDescription;
+  }
+
+  (int?, int?) todayTempRangeFor(String id) {
+    final forecasts = dailyForecastsFor(id);
+    if (forecasts.isEmpty) return (null, null);
+    final today = DateTime.now();
+    for (final f in forecasts) {
+      if (f.date.year == today.year && f.date.month == today.month && f.date.day == today.day) {
+        return (f.tempMax, f.tempMin);
+      }
+    }
+    return (forecasts.first.tempMax, forecasts.first.tempMin);
+  }
+
+  String cityNameFor(String id) {
+    return _savedLocations.firstWhere(
+      (l) => l.municipioId == id, 
+      orElse: () => SavedLocation(municipioId: id, nombre: 'Desconocido')
+    ).nombre;
+  }
+
   WeatherProvider({
     AemetApiService? apiService,
     MunicipioSearchService? searchService,
@@ -252,7 +293,10 @@ class WeatherProvider extends ChangeNotifier {
 
   /// Fuerza la recarga de datos para el municipio activo (pull-to-refresh).
   Future<void> refreshCurrentWeather() async {
-    final id = currentMunicipioId;
+    await refreshWeather(currentMunicipioId);
+  }
+
+  Future<void> refreshWeather(String id) async {
     if (id.isEmpty) return;
     _cache.remove(id);
     _alertsCache.remove(id);
