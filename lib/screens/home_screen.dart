@@ -8,6 +8,7 @@ import '../widgets/daily_view.dart';
 import '../widgets/app_drawer.dart';
 import '../services/update_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:lottie/lottie.dart';
 
 /// Pantalla principal de la aplicación meteorológica.
 ///
@@ -118,10 +119,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
         Expanded(
           child: provider.savedLocations.isEmpty
-              ? const Center(
-                  child: CircularProgressIndicator(
-                    color: Colors.white54,
-                    strokeWidth: 2,
+              ? Center(
+                  child: Lottie.asset(
+                    'assets/lottie/sun_animation.json',
+                    width: 120,
+                    height: 120,
                   ),
                 )
               : PageView.builder(
@@ -380,14 +382,10 @@ class _WeatherPageState extends State<_WeatherPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(
-            color: Colors.white70,
-            strokeWidth: 2,
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Consultando AEMET para $cityName...',
-            style: const TextStyle(color: Colors.white70, fontSize: 15),
+          Lottie.asset(
+            'assets/lottie/sun_animation.json',
+            width: 120,
+            height: 120,
           ),
         ],
       ),

@@ -20,6 +20,7 @@ dependencies:
   package_info_plus: ^9.0.0
   url_launcher: ^6.3.2
   sunrise_sunset_calc: ^3.0.0
+  lottie: ^3.3.2
 
 dev_dependencies:
   flutter_test:
@@ -29,10 +30,13 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/
+    - assets/lottie/
 
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/icon/nubo.png"
+  image_path: "assets/icon/nubo_icon.png"
   adaptive_icon_background: "assets/icon/nubo_background.png"
   adaptive_icon_foreground: "assets/icon/nubo.png"
