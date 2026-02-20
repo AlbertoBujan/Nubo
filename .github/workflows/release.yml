@@ -1,0 +1,95 @@
+name: Android Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Necesario para el firmado si se usa la keystore
+      - name: Crear key.properties
+        run: |
+          echo "storePassword=${{ secrets.KEY_STORE_PASSWORD }}" > android/key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.ALIAS }}" >> android/key.properties
+          echo "storeFile=../keystore.jks" >> android/key.properties
+        env:
+           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+           ALIAS: ${{ secrets.ALIAS }}
+
+      # Decodificar el keystore (si se subió como base64 secret)
+      # Nota: El ejemplo usaba ilharp/sign-android-release que firma DESPUÉS del build.
+      # Flutter build apk --release intenta firmar DURANTE el build si está configurado en build.gradle.
+      # Para simplificar y seguir el ejemplo original que firma el APK (lo cual es más flexible si no se quiere tocar el build.gradle),
+      # usaremos el flutter build apk sin firmar (o debug) y luego firmaremos? NO.
+      # Flutter release build por defecto requiere firma configurada en gradle o genera app-release-unsigned.apk (antiguo) o falla.
+      # Mejor enfoque moderno: Buildear release y dejar que gradle/flutter use las variables de entorno o propiedades.
+      # PERO, el usuario pidió ADAPTAR el ejemplo que usaba `ilharp/sign-android-release`.
+      # Ese action toma un APK no firmado y lo firma.
+      # Flutter `flutter build apk --release` fallará si no hay config de firma en build.gradle? No, genera un apk release firmado con debug key o unsigned warning.
+      # Vamos a usar el enfoque del ejemplo: compilar y luego firmar con el action.
+
+      - name: Compilar APK de Release
+        run: flutter build apk --release --no-shrink
+
+      - name: Firmar el APK
+        uses: ilharp/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDir: build/app/outputs/flutter-apk
+          signingKey: ${{ secrets.SIGNING_KEY }}
+          keyAlias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+          buildToolsVersion: '34.0.0'
+
+      - name: Renombrar APK para la Release
+        run: mv ${{ steps.sign_app.outputs.signedFile }} build/app/outputs/flutter-apk/nubo-release.apk
+
+      - name: Crear Release en GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/nubo-release.apk
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          body: |
+            Cambios en esta versión:
+            ${{ github.event.head_commit.message }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Borrar releases antiguas (Mantener últimas 3)
+        uses: dev-drprasad/delete-older-releases@v0.3.4
+        with:
+          keep_latest: 3
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
