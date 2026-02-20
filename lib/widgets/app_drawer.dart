@@ -92,15 +92,9 @@ class AppDrawer extends StatelessWidget {
               const SizedBox(height: 8),
 
               // ── Sección: Localizaciones ──────────────────
-              _SectionHeader(
+              const _SectionHeader(
                 icon: Icons.location_on,
                 label: 'Localizaciones',
-                trailing: IconButton(
-                  icon: const Icon(Icons.add_circle_outline,
-                      color: Colors.white70, size: 22),
-                  tooltip: 'Añadir localización',
-                  onPressed: () => _openSearch(context),
-                ),
               ),
 
               // Lista de localizaciones guardadas
