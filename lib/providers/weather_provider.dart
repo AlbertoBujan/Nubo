@@ -57,12 +57,16 @@ class WeatherProvider extends ChangeNotifier {
   SunPhase _currentPhase = SunPhase.night;
   Timer? _bgTimer;
 
+  // --- Estado de refresco global (pull-to-refresh) ---
+  bool _isRefreshing = false;
+
   // --- Getters ---
   List<SavedLocation> get savedLocations => _savedLocations;
   int get currentIndex => _currentIndex;
   bool get isLocating => _isLocating;
   List<SavedLocation> get searchResults => _searchResults;
   bool get isSearching => _isSearching;
+  bool get isRefreshing => _isRefreshing;
 
   /// Localización activa actualmente.
   SavedLocation? get currentLocation =>
@@ -309,6 +313,52 @@ class WeatherProvider extends ChangeNotifier {
     } catch (_) {
       // Si falla, simplemente no mostramos alertas
       _alertsCache[municipioId] = [];
+    }
+  }
+
+  /// Refresca los datos de TODAS las ciudades guardadas.
+  /// No borra cache para que los datos sigan visibles durante la recarga.
+  Future<void> refreshAllWeather() async {
+    if (_savedLocations.isEmpty) return;
+
+    _isRefreshing = true;
+    notifyListeners();
+
+    try {
+      await Future.wait(
+        _savedLocations.map((loc) => _silentLoadWeather(loc.municipioId)),
+      );
+    } finally {
+      _isRefreshing = false;
+      notifyListeners();
+    }
+  }
+
+  /// Recarga datos sin mostrar estado de carga (mantiene datos anteriores visibles).
+  Future<void> _silentLoadWeather(String municipioId) async {
+    try {
+      final results = await Future.wait([
+        _apiService.fetchDailyForecast(municipioId),
+        _apiService.fetchHourlyForecast(municipioId),
+      ]);
+
+      final dailyList = DailyForecast.fromAemetJson(results[0]);
+      final hourlyList = HourlyForecast.fromAemetJson(results[1]);
+      final updatedTime = DateTime.now();
+
+      _cache[municipioId] = (
+        daily: dailyList,
+        hourly: hourlyList,
+        lastUpdated: updatedTime,
+      );
+      _errorMap[municipioId] = null;
+      _alertsCache.remove(municipioId);
+      _loadAlerts(municipioId);
+
+      await _persistWeatherData(municipioId, results[0], results[1], updatedTime);
+      await _updateSunPhase();
+    } catch (_) {
+      // En caso de error silencioso, mantenemos los datos anteriores
     }
   }
 

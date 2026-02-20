@@ -269,8 +269,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () => Scaffold.of(context).openDrawer(),
               ),
               
-              // Texto de última actualización (derecha)
-              if (provider.lastRefreshText.isNotEmpty)
+              // Indicador de refresco o texto de última actualización (derecha)
+              if (provider.isRefreshing)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2.0, right: 4.0),
+                  child: Lottie.asset(
+                    'assets/lottie/sun_animation.json',
+                    width: 32,
+                    height: 32,
+                  ),
+                )
+              else if (provider.lastRefreshText.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 10.0, right: 8.0),
                   child: Row(
@@ -533,7 +542,7 @@ class _WeatherPageState extends State<_WeatherPage> {
     final dailyForecasts = provider.dailyForecastsFor(widget.municipioId);
 
     return RefreshIndicator(
-      onRefresh: () => provider.refreshWeather(widget.municipioId),
+      onRefresh: () => provider.refreshAllWeather(),
       backgroundColor: const Color(0xFF1E2A3A),
       color: Colors.white,
       child: SingleChildScrollView(
