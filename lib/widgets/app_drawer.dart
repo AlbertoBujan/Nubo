@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/weather_provider.dart';
 import '../models/saved_location.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'search_location_sheet.dart';
+import 'info_dialog.dart';
 
 /// Drawer lateral con ajustes de la aplicación.
 ///
@@ -181,6 +183,7 @@ class _DrawerHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,6 +202,17 @@ class _DrawerHeader extends StatelessWidget {
                 style: TextStyle(color: Colors.white38, fontSize: 12),
               ),
             ],
+          ),
+          IconButton(
+            icon: Icon(LucideIcons.info, color: Colors.white70),
+            tooltip: 'Información y créditos',
+            onPressed: () {
+              Navigator.of(context).pop(); // Cierra el menú lateral primero
+              showDialog(
+                context: context,
+                builder: (context) => const InfoDialog(),
+              );
+            },
           ),
         ],
       ),

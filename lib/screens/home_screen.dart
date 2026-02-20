@@ -169,7 +169,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Column(
       children: [
-        _buildTopBar(context, provider),
+        if (provider.savedLocations.isNotEmpty)
+          _buildTopBar(context, provider),
 
         Expanded(
           child: provider.savedLocations.isEmpty
