@@ -422,24 +422,7 @@ class _WeatherPageState extends State<_WeatherPage> {
           content = _buildContent(provider, cityName);
         }
 
-        return AnimatedBuilder(
-          animation: widget.pageController,
-          builder: (context, child) {
-            double page = widget.pageIndex.toDouble();
-            if (widget.pageController.position.haveDimensions) {
-              page = widget.pageController.page ?? page;
-            }
-            // Mapeamos la distancia desde la página actual a una opacidad
-            final double distance = (page - widget.pageIndex).abs();
-            final double opacity = (1 - distance).clamp(0.0, 1.0);
-
-            return Opacity(
-              opacity: opacity,
-              child: child,
-            );
-          },
-          child: content,
-        );
+        return content;
       },
     );
   }

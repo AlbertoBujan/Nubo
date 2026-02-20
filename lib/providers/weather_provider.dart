@@ -196,6 +196,8 @@ class WeatherProvider extends ChangeNotifier {
     _bgTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       _updateSunPhase();
     });
+    // Calcular fase solar inmediatamente al construir
+    _updateSunPhase();
   }
 
   @override
@@ -532,16 +534,22 @@ class WeatherProvider extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   /// Calcula la fase solar actual basada en la localización activa.
+  /// Si no hay localización activa, usa coordenadas por defecto (centro de España).
   Future<void> _updateSunPhase() async {
-    final id = currentMunicipioId;
-    if (id.isEmpty) return;
+    double lat = 40.4168; // Madrid por defecto
+    double lon = -3.7038;
 
-    // Obtener coordenadas desde el servicio de búsqueda (caché)
-    final coords = await _searchService.getCoordinates(id);
-    if (coords == null) return;
+    final id = currentMunicipioId;
+    if (id.isNotEmpty) {
+      final coords = await _searchService.getCoordinates(id);
+      if (coords != null) {
+        lat = coords.lat;
+        lon = coords.lon;
+      }
+    }
 
     final now = DateTime.now();
-    final sunTimes = SunCalculator.calculateTimes(now, coords.lat, coords.lon);
+    final sunTimes = SunCalculator.calculateTimes(now, lat, lon);
     
     // Calcular offsets para transiciones (30 minutos)
     const transitionDuration = Duration(minutes: 30);
