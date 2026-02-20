@@ -4,8 +4,8 @@
 set -e
 
 # Deshabilitar el helper de credenciales problemático del editor y pedir autenticación por consola/sistema si fuera necesario
-unset GIT_ASKPASS
-unset SSH_ASKPASS
+#unset GIT_ASKPASS
+#unset SSH_ASKPASS
 
 echo "=== Script de Despliegue de Nubo ==="
 
