@@ -274,11 +274,17 @@ class WeatherProvider extends ChangeNotifier {
       );
       _errorMap[municipioId] = null;
 
-      // Cargar alertas en paralelo (no bloquea la UI si falla)
-      _loadAlerts(municipioId);
+      // Cargar alertas en paralelo y esperar a que terminen para poder guardarlas en caché
+      await _loadAlerts(municipioId);
 
       // Persistir en memoria física al terminar la descarga API
-      await _persistWeatherData(municipioId, results[0], results[1], updatedTime);
+      await _persistWeatherData(
+        municipioId,
+        results[0],
+        results[1],
+        _alertsCache[municipioId] ?? [], // Pasamos las alertas obtenidas
+        updatedTime,
+      );
 
       // Actualizar fase solar
       await _updateSunPhase();
@@ -353,9 +359,15 @@ class WeatherProvider extends ChangeNotifier {
       );
       _errorMap[municipioId] = null;
       _alertsCache.remove(municipioId);
-      _loadAlerts(municipioId);
+      await _loadAlerts(municipioId);
 
-      await _persistWeatherData(municipioId, results[0], results[1], updatedTime);
+      await _persistWeatherData(
+        municipioId,
+        results[0],
+        results[1],
+        _alertsCache[municipioId] ?? [],
+        updatedTime,
+      );
       await _updateSunPhase();
     } catch (_) {
       // En caso de error silencioso, mantenemos los datos anteriores
@@ -541,12 +553,14 @@ class WeatherProvider extends ChangeNotifier {
       String municipioId, 
       List<dynamic> rawDaily, 
       List<dynamic> rawHourly,
+      List<WeatherAlert> currentAlerts,
       DateTime updateTime,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final dataString = jsonEncode({
       'daily': rawDaily,
       'hourly': rawHourly,
+      'alerts': currentAlerts.map((a) => a.toJson()).toList(), // Serializamos alertas
       'lastUpdated': updateTime.toIso8601String(),
     });
     await prefs.setString('weather_data_$municipioId', dataString);
@@ -565,6 +579,14 @@ class WeatherProvider extends ChangeNotifier {
           final daily = DailyForecast.fromAemetJson(decoded['daily']);
           final hourly = HourlyForecast.fromAemetJson(decoded['hourly']);
           final updated = DateTime.parse(decoded['lastUpdated']);
+          
+          // Rehidratar alertas si existen en el JSON antiguo/nuevo
+          if (decoded.containsKey('alerts') && decoded['alerts'] != null) {
+            final List<dynamic> alertsRaw = decoded['alerts'];
+            _alertsCache[loc.municipioId] = alertsRaw
+                .map((a) => WeatherAlert.fromJson(a as Map<String, dynamic>))
+                .toList();
+          }
           
           _cache[loc.municipioId] = (
             daily: daily,

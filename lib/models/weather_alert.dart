@@ -41,6 +41,30 @@ class WeatherAlert {
     required this.probability,
   });
 
+  Map<String, dynamic> toJson() => {
+        'nivel': nivel,
+        'event': event,
+        'headline': headline,
+        'description': description,
+        'instruction': instruction,
+        'areaDescription': areaDescription,
+        'onset': onset?.toIso8601String(),
+        'expires': expires?.toIso8601String(),
+        'probability': probability,
+      };
+
+  factory WeatherAlert.fromJson(Map<String, dynamic> json) => WeatherAlert(
+        nivel: json['nivel'] as String? ?? '',
+        event: json['event'] as String? ?? '',
+        headline: json['headline'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+        instruction: json['instruction'] as String? ?? '',
+        areaDescription: json['areaDescription'] as String? ?? '',
+        onset: json['onset'] != null ? DateTime.tryParse(json['onset']) : null,
+        expires: json['expires'] != null ? DateTime.tryParse(json['expires']) : null,
+        probability: json['probability'] as String? ?? '',
+      );
+
   /// Color del nivel de alerta.
   Color get color {
     switch (nivel.toLowerCase()) {
