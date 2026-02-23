@@ -598,29 +598,29 @@ class WeatherProvider extends ChangeNotifier {
       }
     }
 
-    final now = DateTime.now();
-    final sunTimes = SunCalculator.calculateTimes(now, lat, lon);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final sunTimes = SunCalculator.calculateTimes(DateTime.now(), lat, lon);
     
     // Calcular offsets para transiciones (30 minutos)
-    const transitionDuration = Duration(minutes: 30);
+    const transitionMs = 30 * 60 * 1000;
     
-    final sunriseStart = sunTimes.sunrise.subtract(transitionDuration);
-    final sunriseEnd = sunTimes.sunrise.add(transitionDuration);
+    final sunriseTime = sunTimes.sunrise.millisecondsSinceEpoch;
+    final sunriseStart = sunriseTime - transitionMs;
+    final sunriseEnd = sunriseTime + transitionMs;
     
-    final sunsetStart = sunTimes.sunset.subtract(transitionDuration);
-    final sunsetEnd = sunTimes.sunset.add(transitionDuration);
+    final sunsetTime = sunTimes.sunset.millisecondsSinceEpoch;
+    final sunsetStart = sunsetTime - transitionMs;
+    final sunsetEnd = sunsetTime + transitionMs;
 
     SunPhase newPhase;
 
-    if (now.isAfter(sunriseStart) && now.isBefore(sunriseEnd)) {
+    if (now >= sunriseStart && now < sunriseEnd) {
       newPhase = SunPhase.sunrise;
-    } else if (now.isAfter(sunsetStart) && now.isBefore(sunsetEnd)) {
-      newPhase = SunPhase.sunset;
-    } else if (now.compareTo(sunriseEnd) >= 0 && now.compareTo(sunsetStart) <= 0) {
-      // Es estrictamente después de que termina el amanecer y antes de que empiece el atardecer
+    } else if (now >= sunriseEnd && now < sunsetStart) {
       newPhase = SunPhase.day;
+    } else if (now >= sunsetStart && now < sunsetEnd) {
+      newPhase = SunPhase.sunset;
     } else {
-      // Todo lo demás pertenece a la noche
       newPhase = SunPhase.night;
     }
 
