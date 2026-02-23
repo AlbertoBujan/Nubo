@@ -606,7 +606,7 @@ class _WeatherPageState extends State<_WeatherPage> {
             const SizedBox(height: 8),
 
             // --- Caja 2: Pronóstico por días (scroll horizontal interno) ---
-            DailyView(forecasts: dailyForecasts),
+            DailyView(forecasts: dailyForecasts, alerts: alerts),
 
             const SizedBox(height: 20),
           ],

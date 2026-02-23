@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/daily_forecast.dart';
 import '../models/weather_enums.dart';
+import '../models/weather_alert.dart';
 
 /// Vista vertical de predicción por días.
 ///
@@ -10,8 +11,13 @@ import '../models/weather_enums.dart';
 /// y temperaturas máxima/mínima con una barra de rango visual estilo iOS.
 class DailyView extends StatelessWidget {
   final List<DailyForecast> forecasts;
+  final List<WeatherAlert> alerts;
 
-  const DailyView({super.key, required this.forecasts});
+  const DailyView({
+    super.key, 
+    required this.forecasts,
+    this.alerts = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +64,7 @@ class DailyView extends StatelessWidget {
             forecast: forecast,
             globalMin: globalMin,
             range: range,
+            alerts: alerts,
           ),
         ),
       ],
@@ -70,11 +77,13 @@ class _DailyRow extends StatelessWidget {
   final DailyForecast forecast;
   final int globalMin;
   final int range;
+  final List<WeatherAlert> alerts;
 
   const _DailyRow({
     required this.forecast,
     required this.globalMin,
     required this.range,
+    required this.alerts,
   });
 
   /// Formatea la fecha como nombre del día.
@@ -91,107 +100,162 @@ class _DailyRow extends StatelessWidget {
     return dayName[0].toUpperCase() + dayName.substring(1);
   }
 
+  Color? _getWorstAlertColorForDay(DateTime date) {
+    bool hasAmarillo = false;
+    bool hasNaranja = false;
+    bool hasRojo = false;
+
+    final startOfDay = DateTime(date.year, date.month, date.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    for (final alert in alerts) {
+      if (alert.onset == null && alert.expires == null) continue;
+      
+      final onset = alert.onset ?? alert.expires!.subtract(const Duration(days: 1));
+      final expires = alert.expires ?? alert.onset!.add(const Duration(days: 1));
+
+      // Comprobar solapamiento: (inicio de la alerta < fin del día) y (fin de la alerta > inicio del día)
+      if (onset.isBefore(endOfDay) && expires.isAfter(startOfDay)) {
+        final nivel = alert.nivel.toLowerCase();
+        if (nivel == 'rojo') {
+          hasRojo = true;
+          break; // Ningún aviso supera el rojo
+        } else if (nivel == 'naranja') {
+          hasNaranja = true;
+        } else if (nivel == 'amarillo') {
+          hasAmarillo = true;
+        }
+      }
+    }
+
+    if (hasRojo) return const Color(0xFFD32F2F);
+    if (hasNaranja) return const Color(0xFFFF8F00);
+    if (hasAmarillo) return const Color(0xFFFBC02D);
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final weather = WeatherCode.fromCode(forecast.skyStateCode);
     final isToday = DateTime.now().day == forecast.date.day &&
         DateTime.now().month == forecast.date.month;
+    
+    final alertColor = _getWorstAlertColorForDay(forecast.date);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: isToday
-            ? Colors.white.withValues(alpha: 0.1)
-            : Colors.white.withValues(alpha: 0.05),
-      ),
-      child: Row(
-        children: [
-          // Nombre del día
-          SizedBox(
-            width: 90,
-            child: Text(
-              _formatDay(forecast.date),
-              style: TextStyle(
-                color: isToday ? Colors.white : Colors.white70,
-                fontSize: 15,
-                fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
+    return Stack(
+      children: [
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: isToday
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.white.withValues(alpha: 0.05),
+          ),
+          child: Row(
+            children: [
+              // Nombre del día
+              SizedBox(
+                width: 90,
+                child: Text(
+                  _formatDay(forecast.date),
+                  style: TextStyle(
+                    color: isToday ? Colors.white : Colors.white70,
+                    fontSize: 15,
+                    fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ),
+
+              // Icono del tiempo
+              SizedBox(
+                width: 36,
+                child: Icon(
+                  weather.icon,
+                  color: Colors.white70,
+                  size: 22,
+                ),
+              ),
+
+              // Probabilidad de precipitación (si es > 0)
+              SizedBox(
+                width: 44,
+                child: forecast.precipitationProbability != null &&
+                        forecast.precipitationProbability! > 0
+                    ? Text(
+                        '${forecast.precipitationProbability}%',
+                        style: TextStyle(
+                          color: Colors.blue.shade300,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      )
+                    : const SizedBox.shrink(),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Temperatura mínima
+              SizedBox(
+                width: 32,
+                child: Text(
+                  forecast.tempMin != null ? '${forecast.tempMin}°' : '--',
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 15,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Barra de rango de temperatura
+              Expanded(
+                child: _TemperatureBar(
+                  min: forecast.tempMin ?? 0,
+                  max: forecast.tempMax ?? 0,
+                  globalMin: globalMin,
+                  range: range,
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Temperatura máxima
+              SizedBox(
+                width: 32,
+                child: Text(
+                  forecast.tempMax != null ? '${forecast.tempMax}°' : '--',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.left,
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Indicador del aviso meteorológico 
+        if (alertColor != null)
+          Positioned(
+            left: 12,
+            top: 2,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: alertColor,
+                shape: BoxShape.circle,
               ),
             ),
           ),
-
-          // Icono del tiempo
-          SizedBox(
-            width: 36,
-            child: Icon(
-              weather.icon,
-              color: Colors.white70,
-              size: 22,
-            ),
-          ),
-
-          // Probabilidad de precipitación (si es > 0)
-          SizedBox(
-            width: 44,
-            child: forecast.precipitationProbability != null &&
-                    forecast.precipitationProbability! > 0
-                ? Text(
-                    '${forecast.precipitationProbability}%',
-                    style: TextStyle(
-                      color: Colors.blue.shade300,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                  )
-                : const SizedBox.shrink(),
-          ),
-
-          const SizedBox(width: 8),
-
-          // Temperatura mínima
-          SizedBox(
-            width: 32,
-            child: Text(
-              forecast.tempMin != null ? '${forecast.tempMin}°' : '--',
-              style: const TextStyle(
-                color: Colors.white54,
-                fontSize: 15,
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // Barra de rango de temperatura
-          Expanded(
-            child: _TemperatureBar(
-              min: forecast.tempMin ?? 0,
-              max: forecast.tempMax ?? 0,
-              globalMin: globalMin,
-              range: range,
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // Temperatura máxima
-          SizedBox(
-            width: 32,
-            child: Text(
-              forecast.tempMax != null ? '${forecast.tempMax}°' : '--',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.left,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
