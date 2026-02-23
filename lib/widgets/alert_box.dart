@@ -99,7 +99,6 @@ class _AlertGroupTileState extends State<_AlertGroupTile> {
   @override
   Widget build(BuildContext context) {
     final color = _maxSeverityColor;
-    final count = widget.alerts.length;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),

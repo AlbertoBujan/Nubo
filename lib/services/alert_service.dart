@@ -257,8 +257,8 @@ class AlertService {
     final onsetStr = info.getElement('onset')?.innerText;
     final expiresStr = info.getElement('expires')?.innerText;
 
-    final onset = onsetStr != null ? DateTime.tryParse(onsetStr) : null;
-    final expires = expiresStr != null ? DateTime.tryParse(expiresStr) : null;
+    final onset = onsetStr != null ? DateTime.tryParse(onsetStr)?.toLocal() : null;
+    final expires = expiresStr != null ? DateTime.tryParse(expiresStr)?.toLocal() : null;
 
     // Extraer nivel de los parámetros
     String nivel = '';

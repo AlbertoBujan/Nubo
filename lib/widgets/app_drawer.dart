@@ -247,12 +247,10 @@ class _DrawerHeader extends StatelessWidget {
 class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Widget? trailing;
 
   const _SectionHeader({
     required this.icon,
     required this.label,
-    this.trailing,
   });
 
   @override
@@ -273,7 +271,6 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          ?trailing,
         ],
       ),
     );

@@ -60,8 +60,8 @@ class WeatherAlert {
         description: json['description'] as String? ?? '',
         instruction: json['instruction'] as String? ?? '',
         areaDescription: json['areaDescription'] as String? ?? '',
-        onset: json['onset'] != null ? DateTime.tryParse(json['onset']) : null,
-        expires: json['expires'] != null ? DateTime.tryParse(json['expires']) : null,
+        onset: json['onset'] != null ? DateTime.tryParse(json['onset'])?.toLocal() : null,
+        expires: json['expires'] != null ? DateTime.tryParse(json['expires'])?.toLocal() : null,
         probability: json['probability'] as String? ?? '',
       );
 

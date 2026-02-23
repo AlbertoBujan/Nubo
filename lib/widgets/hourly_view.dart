@@ -94,8 +94,8 @@ class _HourlyCard extends StatelessWidget {
     
     return alerts.where((alert) {
       if (alert.onset == null && alert.expires == null) return false;
-      final onset = (alert.onset ?? alert.expires!.subtract(const Duration(days: 1))).toLocal();
-      final expires = (alert.expires ?? alert.onset!.add(const Duration(days: 1))).toLocal();
+      final onset = alert.onset ?? alert.expires!.subtract(const Duration(days: 1));
+      final expires = alert.expires ?? alert.onset!.add(const Duration(days: 1));
       
       // Mismo comportamiento: onset debe ser <= startOfHour o estar dentro, pero comprobamos estricto
       // para atrapar todo el intervalo
