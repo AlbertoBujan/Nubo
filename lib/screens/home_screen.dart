@@ -601,7 +601,7 @@ class _WeatherPageState extends State<_WeatherPage> {
             AlertBox(alerts: alerts),
 
             // --- Caja 1: Pronóstico por horas ---
-            HourlyView(forecasts: hourlyForecasts),
+            HourlyView(forecasts: hourlyForecasts, alerts: alerts),
 
             const SizedBox(height: 8),
 

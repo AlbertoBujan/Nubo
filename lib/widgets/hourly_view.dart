@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/hourly_forecast.dart';
 import '../models/weather_enums.dart';
+import '../models/weather_alert.dart';
 
 /// Vista horizontal de predicción por horas.
 ///
@@ -10,8 +11,13 @@ import '../models/weather_enums.dart';
 /// para cada hora, con icono, temperatura y hora.
 class HourlyView extends StatelessWidget {
   final List<HourlyForecast> forecasts;
+  final List<WeatherAlert> alerts;
 
-  const HourlyView({super.key, required this.forecasts});
+  const HourlyView({
+    super.key, 
+    required this.forecasts,
+    this.alerts = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -54,13 +60,16 @@ class HourlyView extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 150,
+          height: 165, // Incrementado para dejar espacio a los iconos inferiores
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: displayForecasts.length,
             itemBuilder: (context, index) {
-              return _HourlyCard(forecast: displayForecasts[index]);
+              return _HourlyCard(
+                forecast: displayForecasts[index],
+                alerts: alerts,
+              );
             },
           ),
         ),
@@ -69,11 +78,46 @@ class HourlyView extends StatelessWidget {
   }
 }
 
-/// Tarjeta individual para cada hora.
 class _HourlyCard extends StatelessWidget {
   final HourlyForecast forecast;
+  final List<WeatherAlert> alerts;
 
-  const _HourlyCard({required this.forecast});
+  const _HourlyCard({
+    required this.forecast,
+    required this.alerts,
+  });
+
+  /// Busca alertas vigentes durante esta hora.
+  List<WeatherAlert> _getActiveAlertsForHour() {
+    final startOfHour = forecast.dateTime;
+    final endOfHour = startOfHour.add(const Duration(hours: 1));
+    
+    return alerts.where((alert) {
+      if (alert.onset == null && alert.expires == null) return false;
+      final onset = (alert.onset ?? alert.expires!.subtract(const Duration(days: 1))).toLocal();
+      final expires = (alert.expires ?? alert.onset!.add(const Duration(days: 1))).toLocal();
+      
+      // Mismo comportamiento: onset debe ser <= startOfHour o estar dentro, pero comprobamos estricto
+      // para atrapar todo el intervalo
+      return (onset.isBefore(endOfHour) || onset.isAtSameMomentAs(endOfHour)) && 
+             (expires.isAfter(startOfHour) || expires.isAtSameMomentAs(startOfHour));
+    }).toList();
+  }
+
+  /// Devuelve el icono apropiado según el texto descriptivo del evento
+  IconData _getIconForEvent(String event) {
+    final text = event.toLowerCase();
+    if (text.contains('viento')) return LucideIcons.wind;
+    if (text.contains('costero') || text.contains('mar')) return LucideIcons.waves;
+    if (text.contains('lluvia') || text.contains('precip')) return LucideIcons.cloudRain;
+    if (text.contains('tormenta')) return LucideIcons.cloudLightning;
+    if (text.contains('nieve') || text.contains('nevada')) return LucideIcons.snowflake;
+    if (text.contains('niebla')) return LucideIcons.cloudFog;
+    if (text.contains('temperatura') || text.contains('calor') || text.contains('frío')) {
+      return LucideIcons.thermometer;
+    }
+    return Icons.warning;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +125,8 @@ class _HourlyCard extends StatelessWidget {
     final timeStr = DateFormat('HH:mm').format(forecast.dateTime);
     final isNow = DateTime.now().hour == forecast.dateTime.hour &&
         DateTime.now().day == forecast.dateTime.day;
+        
+    final activeAlerts = _getActiveAlertsForHour();
 
     return Container(
       width: 80,
@@ -130,6 +176,24 @@ class _HourlyCard extends StatelessWidget {
               fontSize: 17,
               fontWeight: FontWeight.w600,
             ),
+          ),
+          // Caja de iconos con altura fija para evitar saltos en el layout
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 14,
+            child: activeAlerts.isNotEmpty
+                ? Wrap(
+                    spacing: 4,
+                    alignment: WrapAlignment.center,
+                    children: activeAlerts.map((alert) {
+                      return Icon(
+                        _getIconForEvent(alert.event),
+                        color: alert.color,
+                        size: 14,
+                      );
+                    }).toList(),
+                  )
+                : null,
           ),
         ],
       ),
