@@ -60,7 +60,7 @@ class HourlyView extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 165, // Incrementado para dejar espacio a los iconos inferiores
+          height: 135, // Recortado agresivamente desde 175 para compactar la lista horizontal
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -119,6 +119,19 @@ class _HourlyCard extends StatelessWidget {
     return Icons.warning;
   }
 
+  /// Calcula el nombre del día en formato corto (Hoy, Mañana, Mié, Jue, ...)
+  String _getDayLabel() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final forecastDate = DateTime(forecast.dateTime.year, forecast.dateTime.month, forecast.dateTime.day);
+    
+    if (forecastDate == today) return 'Hoy';
+    if (forecastDate == today.add(const Duration(days: 1))) return 'Mañana';
+    
+    final dayName = DateFormat('EEEE', 'es_ES').format(forecast.dateTime);
+    return dayName[0].toUpperCase() + dayName.substring(1);
+  }
+
   @override
   Widget build(BuildContext context) {
     final weather = WeatherCode.fromCode(forecast.skyStateCode);
@@ -128,10 +141,25 @@ class _HourlyCard extends StatelessWidget {
         
     final activeAlerts = _getActiveAlertsForHour();
 
-    return Container(
-      width: 80,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
+    return Column(
+      children: [
+        // Etiqueta superior del día
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            _getDayLabel(),
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        // Tarjeta de la hora
+        Container(
+          width: 80,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: isNow
             ? LinearGradient(
@@ -197,6 +225,8 @@ class _HourlyCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
+      ],
     );
   }
 }
