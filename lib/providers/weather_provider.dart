@@ -53,8 +53,9 @@ class WeatherProvider extends ChangeNotifier {
   List<SavedLocation> _searchResults = [];
   bool _isSearching = false;
 
-  // --- Fondo dinámico ---
+  // --- Fondo dinámico e iluminación ---
   SunPhase _currentPhase = SunPhase.night;
+  final Map<String, SunTimes> _sunTimesCache = {};
   Timer? _bgTimer;
 
   // --- Estado de refresco global (pull-to-refresh) ---
@@ -62,6 +63,8 @@ class WeatherProvider extends ChangeNotifier {
 
   // --- Getters ---
   List<SavedLocation> get savedLocations => _savedLocations;
+  SunPhase get currentPhase => _currentPhase;
+  SunTimes? get currentSunTimes => _sunTimesCache[currentMunicipioId];
   int get currentIndex => _currentIndex;
   bool get isLocating => _isLocating;
   List<SavedLocation> get searchResults => _searchResults;
@@ -450,6 +453,7 @@ class WeatherProvider extends ChangeNotifier {
     _cache.remove(id);
     _errorMap.remove(id);
     _loadingMap.remove(id);
+    _sunTimesCache.remove(id);
 
     // Eliminar también la persistencia en disco de estos datos
     final prefs = await SharedPreferences.getInstance();
@@ -561,6 +565,10 @@ class WeatherProvider extends ChangeNotifier {
       'daily': rawDaily,
       'hourly': rawHourly,
       'alerts': currentAlerts.map((a) => a.toJson()).toList(), // Serializamos alertas
+      'sunTimes': _sunTimesCache[municipioId] != null ? {
+        'sunrise': _sunTimesCache[municipioId]!.sunrise.toIso8601String(),
+        'sunset': _sunTimesCache[municipioId]!.sunset.toIso8601String(),
+      } : null,
       'lastUpdated': updateTime.toIso8601String(),
     });
     await prefs.setString('weather_data_$municipioId', dataString);
@@ -586,6 +594,15 @@ class WeatherProvider extends ChangeNotifier {
             _alertsCache[loc.municipioId] = alertsRaw
                 .map((a) => WeatherAlert.fromJson(a as Map<String, dynamic>))
                 .toList();
+          }
+
+          // Rehidratar SunTimes
+          if (decoded.containsKey('sunTimes') && decoded['sunTimes'] != null) {
+            final stMap = decoded['sunTimes'];
+            _sunTimesCache[loc.municipioId] = SunTimes(
+              sunrise: DateTime.parse(stMap['sunrise']).toLocal(),
+              sunset: DateTime.parse(stMap['sunset']).toLocal(),
+            );
           }
           
           _cache[loc.municipioId] = (
@@ -623,6 +640,11 @@ class WeatherProvider extends ChangeNotifier {
     final now = DateTime.now().millisecondsSinceEpoch;
     final sunTimes = SunCalculator.calculateTimes(DateTime.now(), lat, lon);
     
+    // Almacenar en la caché local para acceso síncrono
+    if (id.isNotEmpty) {
+      _sunTimesCache[id] = sunTimes;
+    }
+    
     // Calcular offsets para transiciones (30 minutos)
     const transitionMs = 30 * 60 * 1000;
     
@@ -648,8 +670,11 @@ class WeatherProvider extends ChangeNotifier {
 
     if (_currentPhase != newPhase) {
       _currentPhase = newPhase;
-      notifyListeners();
     }
+    
+    // Siempre notificamos, ya que las vistas pueden estar bloqueadas a la espera 
+    // de que _sunTimesCache esté rellenado.
+    notifyListeners();
   }
 
   /// Gradiente de fondo según la fase solar actual.

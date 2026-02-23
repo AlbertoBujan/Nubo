@@ -156,14 +156,19 @@ class _AlertGroupTileState extends State<_AlertGroupTile> {
             ),
           ),
           
-          // Lista expandida
-          if (_expanded)
-            Padding(
-               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-               child: Column(
-                 children: widget.alerts.map((alert) => _AlertDetailCard(alert: alert)).toList(),
-               ),
-            ),
+          // Lista expandida animada
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: _expanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: Column(
+                      children: widget.alerts.map((alert) => _AlertDetailCard(alert: alert)).toList(),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );
