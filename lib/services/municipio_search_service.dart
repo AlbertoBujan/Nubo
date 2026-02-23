@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/saved_location.dart';
@@ -21,38 +22,70 @@ class MunicipioSearchService {
   MunicipioSearchService({http.Client? client})
       : _client = client ?? http.Client();
 
+  /// Petición con reintento y timeout
+  Future<http.Response> _getWithRetry(String url, {Map<String, String>? headers}) async {
+    const int maxRetries = 3;
+    int retryDelayMillis = 500;
+
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        final response = await _client
+            .get(Uri.parse(url), headers: headers)
+            .timeout(const Duration(seconds: 2));
+        
+        if (response.statusCode == 429 && attempt < maxRetries) {
+          await Future.delayed(Duration(milliseconds: retryDelayMillis));
+          retryDelayMillis *= 2;
+          continue;
+        }
+
+        return response;
+      } catch (e) {
+        if (attempt == maxRetries) rethrow;
+        await Future.delayed(Duration(milliseconds: retryDelayMillis));
+        retryDelayMillis *= 2;
+      }
+    }
+    throw Exception('Error de red al cargar municipios');
+  }
+
   /// Carga el listado completo si aún no está en caché.
   Future<void> _ensureLoaded() async {
     if (_loaded) return;
 
     const endpoint = '$_baseUrl/api/maestro/municipios';
 
-    final response1 = await _client.get(
-      Uri.parse(endpoint),
-      headers: {'api_key': _apiKey},
-    );
-
-    if (response1.statusCode != 200) return;
-
-    final body1 = jsonDecode(response1.body) as Map<String, dynamic>;
-    final datosUrl = body1['datos'] as String?;
-    if (datosUrl == null) return;
-
-    final response2 = await _client.get(Uri.parse(datosUrl));
-    if (response2.statusCode != 200) return;
-
-    String decoded;
     try {
-      decoded = utf8.decode(response2.bodyBytes);
-    } catch (_) {
-      decoded = latin1.decode(response2.bodyBytes);
-    }
+      final response1 = await _getWithRetry(
+        endpoint,
+        headers: {'api_key': _apiKey},
+      );
 
-    final data = jsonDecode(decoded);
-    if (data is List) {
-      _allMunicipios = data.cast<Map<String, dynamic>>();
+      if (response1.statusCode != 200) return;
+
+      final body1 = jsonDecode(response1.body) as Map<String, dynamic>;
+      final datosUrl = body1['datos'] as String?;
+      if (datosUrl == null) return;
+
+      final response2 = await _getWithRetry(datosUrl);
+      if (response2.statusCode != 200) return;
+
+      String decoded;
+      try {
+        decoded = utf8.decode(response2.bodyBytes);
+      } catch (_) {
+        decoded = latin1.decode(response2.bodyBytes);
+      }
+
+      final data = jsonDecode(decoded);
+      if (data is List) {
+        _allMunicipios = data.cast<Map<String, dynamic>>();
+      }
+      _loaded = true;
+    } catch (_) {
+      // Si la red falla de manera persistente, abortamos el intento sin petar la app
+      return;
     }
-    _loaded = true;
   }
 
   /// Busca municipios cuyo nombre contenga [query] (insensible a mayúsculas).

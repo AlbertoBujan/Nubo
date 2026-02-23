@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -34,38 +35,54 @@ class AemetApiService {
     return _fetchAemetData(url);
   }
 
+  /// Método privado con lógica de reintento y timeout para peticiones HTTP
+  Future<http.Response> _getWithRetry(String url, {Map<String, String>? headers}) async {
+    const int maxRetries = 3;
+    int retryDelayMillis = 500;
+
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        final response = await _client
+            .get(Uri.parse(url), headers: headers)
+            .timeout(const Duration(seconds: 2));
+
+        if (response.statusCode == 429 && attempt < maxRetries) {
+          // Rate-limit: esperamos y reintentamos
+          await Future.delayed(Duration(milliseconds: retryDelayMillis));
+          retryDelayMillis *= 2;
+          continue;
+        }
+
+        return response;
+      } catch (e) {
+        if (attempt == maxRetries) {
+          rethrow;
+        }
+        await Future.delayed(Duration(milliseconds: retryDelayMillis));
+        retryDelayMillis *= 2;
+      }
+    }
+    throw AemetApiException('Error de red persistente', 500);
+  }
+
   /// Método privado que implementa el flujo de dos pasos de la API de AEMET.
   ///
   /// PASO 1: Petición al endpoint con el token api_key en los headers.
-  ///         Se incluye lógica de reintento exponencial para mitigar códigos 429 (Too Many Requests).
-  ///
+  ///         Se incluye lógica de reintento para timeout y conexión.
   /// PASO 2: GET a la URL temporal (sin token) para obtener el JSON final.
   Future<List<dynamic>> _fetchAemetData(String endpoint) async {
     // --- PASO 1: Solicitar la URL temporal ---
     
-    http.Response? response1;
-    const int maxRetries = 3;
-    int retryDelayMillis = 1500; // Empezamos esperando 1.5s antes del 1º reintento
-
-    for (int attempt = 0; attempt <= maxRetries; attempt++) {
-      response1 = await _client.get(
-        Uri.parse(endpoint),
-        headers: {'api_key': _apiKey},
-      );
-
-      // Si tenemos éxito (200), o no es un error de rate-limit (429), rompemos el bucle
-      if (response1.statusCode != 429 || attempt == maxRetries) {
-        break;
-      }
-      
-      // Si es 429 y aún quedan intentos, esperamos antes de reintentar (Backoff exponencial)
-      await Future.delayed(Duration(milliseconds: retryDelayMillis));
-      retryDelayMillis *= 2; // Siguiente reintento tarda el doble (3s, luego 6s...)
+    http.Response response1;
+    try {
+      response1 = await _getWithRetry(endpoint, headers: {'api_key': _apiKey});
+    } catch (e) {
+      throw AemetApiException('Timeout o error de red en Paso 1: $e', 500);
     }
 
-    if (response1!.statusCode != 200) {
+    if (response1.statusCode != 200) {
       throw AemetApiException(
-        'Error de sobrecarga. Código ${response1.statusCode}',
+        'Error del servidor. Código ${response1.statusCode}',
         response1.statusCode,
       );
     }
@@ -82,7 +99,12 @@ class AemetApiService {
     }
 
     // --- PASO 2: Obtener los datos finales desde la URL temporal ---
-    final response2 = await _client.get(Uri.parse(datosUrl));
+    http.Response response2;
+    try {
+      response2 = await _getWithRetry(datosUrl);
+    } catch (e) {
+      throw AemetApiException('Timeout o error de red en Paso 2: $e', 500);
+    }
 
     if (response2.statusCode != 200) {
       throw AemetApiException(

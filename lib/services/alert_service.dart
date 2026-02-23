@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
@@ -119,6 +120,33 @@ class AlertService {
     '52': '79',
   };
 
+  /// Petición con reintento y timeout
+  Future<http.Response> _getWithRetry(String url, {Map<String, String>? headers}) async {
+    const int maxRetries = 3;
+    int retryDelayMillis = 500;
+
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        final response = await _client
+            .get(Uri.parse(url), headers: headers)
+            .timeout(const Duration(seconds: 2));
+        
+        if (response.statusCode == 429 && attempt < maxRetries) {
+          await Future.delayed(Duration(milliseconds: retryDelayMillis));
+          retryDelayMillis *= 2;
+          continue;
+        }
+
+        return response;
+      } catch (e) {
+        if (attempt == maxRetries) rethrow;
+        await Future.delayed(Duration(milliseconds: retryDelayMillis));
+        retryDelayMillis *= 2;
+      }
+    }
+    throw Exception('Error persistente de red al obtener alertas');
+  }
+
   /// Obtiene las alertas activas para un municipio dado.
   ///
   /// [municipioId] es el código INE del municipio (ej: "28079").
@@ -134,8 +162,8 @@ class AlertService {
       // Paso 1: obtener URL temporal
       final endpoint =
           '$_baseUrl/api/avisos_cap/ultimoelaborado/area/$areaCode';
-      final response1 = await _client.get(
-        Uri.parse(endpoint),
+      final response1 = await _getWithRetry(
+        endpoint,
         headers: {'api_key': _apiKey},
       );
 
@@ -146,7 +174,7 @@ class AlertService {
       if (datosUrl == null) return [];
 
       // Paso 2: obtener datos
-      final response2 = await _client.get(Uri.parse(datosUrl));
+      final response2 = await _getWithRetry(datosUrl);
       if (response2.statusCode != 200) return [];
 
       String decoded;
