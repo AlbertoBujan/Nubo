@@ -120,16 +120,16 @@ class _AlertGroupTileState extends State<_AlertGroupTile> {
                 children: [
                    Icon(_icon, color: color, size: 20),
                    const SizedBox(width: 12),
-                   Expanded(
-                     child: Text(
-                       '${widget.title} ($count)',
-                       style: TextStyle(
-                         color: Colors.white,
-                         fontSize: 16,
-                         fontWeight: FontWeight.w600,
+                     Expanded(
+                       child: Text(
+                         widget.title,
+                         style: const TextStyle(
+                           color: Colors.white,
+                           fontSize: 16,
+                           fontWeight: FontWeight.w600,
+                         ),
                        ),
                      ),
-                   ),
                    // Badge de severidad máxima
                    Container(
                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
