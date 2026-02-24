@@ -97,10 +97,10 @@ class _HourlyCard extends StatelessWidget {
       final onset = alert.onset ?? alert.expires!.subtract(const Duration(days: 1));
       final expires = alert.expires ?? alert.onset!.add(const Duration(days: 1));
       
-      // Mismo comportamiento: onset debe ser <= startOfHour o estar dentro, pero comprobamos estricto
-      // para atrapar todo el intervalo
-      return (onset.isBefore(endOfHour) || onset.isAtSameMomentAs(endOfHour)) && 
-             (expires.isAfter(startOfHour) || expires.isAtSameMomentAs(startOfHour));
+      // Para que un aviso sea válido en esta hora, debe comenzar antes de que termine la hora
+      // y terminar después de que haya empezado la hora. Así evitamos que apunte a las 07:00
+      // un aviso que justo empieza a las 08:00.
+      return onset.isBefore(endOfHour) && expires.isAfter(startOfHour);
     }).toList();
   }
 
@@ -205,7 +205,6 @@ class _HourlyCard extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          // Caja de iconos con altura fija para evitar saltos en el layout
           const SizedBox(height: 6),
           SizedBox(
             height: 14,
@@ -213,13 +212,20 @@ class _HourlyCard extends StatelessWidget {
                 ? Wrap(
                     spacing: 4,
                     alignment: WrapAlignment.center,
-                    children: activeAlerts.map((alert) {
-                      return Icon(
-                        _getIconForEvent(alert.event),
-                        color: alert.color,
-                        size: 14,
-                      );
-                    }).toList(),
+                    children: () {
+                      final uniqueIcons = <IconData, Color>{};
+                      for (final alert in activeAlerts) {
+                        final icon = _getIconForEvent(alert.event);
+                        uniqueIcons.putIfAbsent(icon, () => alert.color);
+                      }
+                      return uniqueIcons.entries.map((entry) {
+                        return Icon(
+                          entry.key,
+                          color: entry.value,
+                          size: 14,
+                        );
+                      }).toList();
+                    }(),
                   )
                 : null,
           ),
