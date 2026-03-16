@@ -1,7 +1,8 @@
-/// Modelo para la predicción meteorológica horaria de AEMET.
+import 'weather_enums.dart';
+
+/// Modelo para la predicción meteorológica horaria.
 ///
-/// Parsea el JSON horario, extrayendo temperatura, estado del cielo
-/// y precipitación para cada hora del día.
+/// Parsea el JSON horario de Open Meteo.
 class HourlyForecast {
   final DateTime dateTime;
   final int? temperature;
@@ -23,118 +24,66 @@ class HourlyForecast {
     this.windDirection,
   });
 
-  /// Parsea la lista de predicciones horarias del JSON de AEMET.
-  ///
-  /// La estructura del JSON horario de AEMET:
-  /// ```json
-  /// [{ "prediccion": { "dia": [
-  ///   { "fecha": "2024-01-01T00:00:00",
-  ///     "temperatura": [{ "value": 5, "periodo": "00" }, { "value": 6, "periodo": "01" }, ...],
-  ///     "estadoCielo": [{ "value": "12", "descripcion": "Poco nuboso", "periodo": "00" }, ...],
-  ///     "probPrecipitacion": [{ "value": 0, "periodo": "0006" }, ...],
-  ///     "humedadRelativa": [{ "value": 80, "periodo": "00" }, ...],
-  ///     "vientoAndRachaMax": [{ "direccion": ["N"], "velocidad": [10], "periodo": "00" }, ...]
-  ///   }, ...
-  /// ] } }]
-  /// ```
-  static List<HourlyForecast> fromAemetJson(List<dynamic> json) {
+  /// Parsea la respuesta columbar (arrays paralelos) de Open Meteo
+  static List<HourlyForecast> fromOpenMeteoJson(Map<String, dynamic> json) {
     final List<HourlyForecast> forecasts = [];
 
-    if (json.isEmpty) return forecasts;
+    final hourly = json['hourly'];
+    if (hourly == null) return forecasts;
 
-    final prediccion = json[0]['prediccion'];
-    if (prediccion == null) return forecasts;
+    final time = hourly['time'] as List<dynamic>? ?? [];
+    final temperature = hourly['temperature_2m'] as List<dynamic>? ?? [];
+    final precipProb = hourly['precipitation_probability'] as List<dynamic>? ?? [];
+    final weatherCode = hourly['weather_code'] as List<dynamic>? ?? [];
+    final humidity = hourly['relative_humidity_2m'] as List<dynamic>? ?? [];
+    final windSpeed = hourly['wind_speed_10m'] as List<dynamic>? ?? [];
+    final windDirection = hourly['wind_direction_10m'] as List<dynamic>? ?? [];
+    final isDay = hourly['is_day'] as List<dynamic>? ?? [];
 
-    final dias = prediccion['dia'] as List<dynamic>? ?? [];
-
-    for (final dia in dias) {
-      try {
-        final fecha = DateTime.parse(dia['fecha'] as String);
-
-        // Parseamos las temperaturas por hora
-        final temperaturas = dia['temperatura'] as List<dynamic>? ?? [];
-        final tempMap = <String, int>{};
-        for (final t in temperaturas) {
-          final periodo = t['periodo']?.toString() ?? '';
-          final value = t['value'];
-          if (periodo.isNotEmpty && value != null) {
-            tempMap[periodo] = value is int ? value : (int.tryParse(value.toString()) ?? 0);
-          }
+    for (int i = 0; i < time.length; i++) {
+        final date = DateTime.tryParse(time[i] as String);
+        if (date == null) continue;
+        
+         String? codeVal = weatherCode.length > i ? weatherCode[i]?.toString() : null;
+         
+         // Si es de noche, aplicamos el sufijo 'n' al código WMO
+         if (codeVal != null && isDay.length > i) {
+           final dayFlag = isDay[i];
+           if (dayFlag == 0) {
+             codeVal = '${codeVal}n';
+           }
+         }
+         
+        final skyCodeOb = WeatherCode.fromCode(codeVal);
+        
+        String? windDirStr;
+        if (windDirection.length > i && windDirection[i] != null) {
+             windDirStr = _degreesToCompass(windDirection[i] as num);
         }
 
-        // Estado del cielo por hora
-        final estadoCielo = dia['estadoCielo'] as List<dynamic>? ?? [];
-        final skyMap = <String, Map<String, String>>{};
-        for (final e in estadoCielo) {
-          final periodo = e['periodo']?.toString() ?? '';
-          final value = e['value']?.toString() ?? '';
-          final desc = e['descripcion']?.toString() ?? '';
-          if (periodo.isNotEmpty && periodo.length <= 2) {
-            skyMap[periodo] = {'code': value, 'desc': desc};
-          }
-        }
-
-        // Probabilidad de precipitación (viene en rangos de 6h: "0006", "0612", etc.)
-        final probPrecip =
-            dia['probPrecipitacion'] as List<dynamic>? ?? [];
-        final precipMap = <String, int>{};
-        for (final p in probPrecip) {
-          final periodo = p['periodo']?.toString() ?? '';
-          final value = p['value'];
-          if (periodo.isNotEmpty && value != null) {
-            final intVal = value is int ? value : (int.tryParse(value.toString()) ?? 0);
-            precipMap[periodo] = intVal;
-          }
-        }
-
-        // Humedad relativa por hora
-        final humedadRel = dia['humedadRelativa'] as List<dynamic>? ?? [];
-        final humMap = <String, int>{};
-        for (final h in humedadRel) {
-          final periodo = h['periodo']?.toString() ?? '';
-          final value = h['value'];
-          if (periodo.isNotEmpty && value != null) {
-            humMap[periodo] = value is int ? value : (int.tryParse(value.toString()) ?? 0);
-          }
-        }
-
-        // Creamos un forecast por cada hora que tenga temperatura
-        for (final entry in tempMap.entries) {
-          final hora = entry.key.padLeft(2, '0');
-          final horaInt = int.tryParse(hora) ?? 0;
-          final dateTime = DateTime(fecha.year, fecha.month, fecha.day, horaInt);
-
-          final sky = skyMap[hora];
-          
-          // Buscar precipitación para esta hora (en rangos de 6h)
-          int? precipProb;
-          for (final pe in precipMap.entries) {
-            if (pe.key.length == 4) {
-              final start = int.tryParse(pe.key.substring(0, 2)) ?? 0;
-              final end = int.tryParse(pe.key.substring(2, 4)) ?? 0;
-              if (horaInt >= start && horaInt < end) {
-                precipProb = pe.value;
-                break;
-              }
-            }
-          }
-
-          forecasts.add(HourlyForecast(
-            dateTime: dateTime,
-            temperature: entry.value,
-            skyStateCode: sky?['code'] ?? '',
-            skyDescription: sky?['desc'] ?? '',
-            precipitationProbability: precipProb,
-            humidity: humMap[hora],
-          ));
-        }
-      } catch (e) {
-        continue;
-      }
+        forecasts.add(HourlyForecast(
+          dateTime: date,
+          temperature: temperature.length > i ? (temperature[i] as num?)?.round() : null,
+          skyStateCode: codeVal ?? '',
+          skyDescription: skyCodeOb.description,
+          precipitationProbability: precipProb.length > i ? (precipProb[i] as num?)?.round() : null,
+          humidity: humidity.length > i ? (humidity[i] as num?)?.round() : null,
+          windSpeed: windSpeed.length > i ? (windSpeed[i] as num?)?.round() : null,
+          windDirection: windDirStr,
+        ));
     }
-
-    // Ordenamos por fecha/hora
-    forecasts.sort((a, b) => a.dateTime.compareTo(b.dateTime));
-    return forecasts;
+    
+    // Descartamos predicciones pasadas por más de 1 hora
+    final now = DateTime.now();
+    return forecasts.where((f) => f.dateTime.isAfter(now.subtract(const Duration(hours: 1)))).toList();
+  }
+  
+  static String _degreesToCompass(num degrees) {
+    const val = [
+      "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+      "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"
+    ];
+    int index = ((degrees / 22.5) + 0.5).floor() % 16;
+    return val[index];
   }
 }

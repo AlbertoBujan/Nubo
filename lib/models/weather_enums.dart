@@ -25,141 +25,91 @@ class WeatherCode {
   ///   Niebla/Bruma → CloudFog
   ///   Calima → Haze
   static const Map<String, WeatherCode> codes = {
-    // --- Despejado ---
-    '11':  WeatherCode('Despejado', LucideIcons.sun),
-    '11n': WeatherCode('Despejado noche', LucideIcons.moon),
+    // --- 0: Despejado ---
+    '0': WeatherCode('Despejado', LucideIcons.sun),
+    '0n': WeatherCode('Despejado', LucideIcons.moon),
 
-    // --- Poco nuboso ---
-    '12':  WeatherCode('Poco nuboso', LucideIcons.cloudSun),
-    '12n': WeatherCode('Poco nuboso noche', LucideIcons.cloudMoon),
+    // --- 1: Principalmente despejado ---
+    '1': WeatherCode('Poco nuboso', LucideIcons.cloudSun),
+    '1n': WeatherCode('Poco nuboso', LucideIcons.cloudMoon),
 
-    // --- Intervalos nubosos ---
-    '13':  WeatherCode('Intervalos nubosos', LucideIcons.cloudSun),
-    '13n': WeatherCode('Intervalos nubosos noche', LucideIcons.cloudMoon),
+    // --- 2: Parcialmente nublado ---
+    '2': WeatherCode('Intervalos nubosos', LucideIcons.cloudSun),
+    '2n': WeatherCode('Intervalos nubosos', LucideIcons.cloudMoon),
 
-    // --- Nuboso ---
-    '14':  WeatherCode('Nuboso', LucideIcons.cloudSun),
-    '14n': WeatherCode('Nuboso noche', LucideIcons.cloudMoon),
+    // --- 3: Cubierto ---
+    '3': WeatherCode('Cubierto', LucideIcons.cloud),
+    '3n': WeatherCode('Cubierto', LucideIcons.cloud),
 
-    // --- Muy nuboso ---
-    '15':  WeatherCode('Muy nuboso', LucideIcons.cloud),
-    '15n': WeatherCode('Muy nuboso noche', LucideIcons.cloud),
+    // --- 45, 48: Niebla ---
+    '45': WeatherCode('Niebla', LucideIcons.cloudFog),
+    '45n': WeatherCode('Niebla', LucideIcons.cloudFog),
+    '48': WeatherCode('Niebla escarchada', LucideIcons.cloudFog),
+    '48n': WeatherCode('Niebla escarchada', LucideIcons.cloudFog),
 
-    // --- Cubierto ---
-    '16':  WeatherCode('Cubierto', LucideIcons.cloud),
-    '16n': WeatherCode('Cubierto noche', LucideIcons.cloud),
+    // --- 51, 53, 55: Llovizna ---
+    '51': WeatherCode('Llovizna ligera', LucideIcons.cloudDrizzle),
+    '51n': WeatherCode('Llovizna ligera', LucideIcons.cloudDrizzle),
+    '53': WeatherCode('Llovizna moderada', LucideIcons.cloudDrizzle),
+    '53n': WeatherCode('Llovizna moderada', LucideIcons.cloudDrizzle),
+    '55': WeatherCode('Llovizna densa', LucideIcons.cloudDrizzle),
+    '55n': WeatherCode('Llovizna densa', LucideIcons.cloudDrizzle),
 
-    // --- Nubes altas ---
-    '17':  WeatherCode('Nubes altas', LucideIcons.cloudSun),
-    '17n': WeatherCode('Nubes altas noche', LucideIcons.cloudMoon),
+    // --- 56, 57: Llovizna helada ---
+    '56': WeatherCode('Llovizna helada ligera', LucideIcons.cloudDrizzle),
+    '56n': WeatherCode('Llovizna helada ligera', LucideIcons.cloudDrizzle),
+    '57': WeatherCode('Llovizna helada densa', LucideIcons.cloudDrizzle),
+    '57n': WeatherCode('Llovizna helada densa', LucideIcons.cloudDrizzle),
 
-    // --- Intervalos nubosos con lluvia escasa ---
-    '23':  WeatherCode('Intervalos nubosos con lluvia escasa', LucideIcons.cloudDrizzle),
-    '23n': WeatherCode('Intervalos nubosos con lluvia escasa noche', LucideIcons.cloudDrizzle),
+    // --- 61, 63, 65: Lluvia ---
+    '61': WeatherCode('Lluvia débil', LucideIcons.cloudRain),
+    '61n': WeatherCode('Lluvia débil', LucideIcons.cloudRain),
+    '63': WeatherCode('Lluvia moderada', LucideIcons.cloudRain),
+    '63n': WeatherCode('Lluvia moderada', LucideIcons.cloudRain),
+    '65': WeatherCode('Lluvia fuerte', LucideIcons.cloudRain),
+    '65n': WeatherCode('Lluvia fuerte', LucideIcons.cloudRain),
 
-    // --- Nuboso con lluvia escasa ---
-    '24':  WeatherCode('Nuboso con lluvia escasa', LucideIcons.cloudDrizzle),
-    '24n': WeatherCode('Nuboso con lluvia escasa noche', LucideIcons.cloudDrizzle),
+    // --- 66, 67: Lluvia helada ---
+    '66': WeatherCode('Lluvia helada débil', LucideIcons.cloudRain),
+    '66n': WeatherCode('Lluvia helada débil', LucideIcons.cloudRain),
+    '67': WeatherCode('Lluvia helada fuerte', LucideIcons.cloudRain),
+    '67n': WeatherCode('Lluvia helada fuerte', LucideIcons.cloudRain),
 
-    // --- Muy nuboso con lluvia escasa ---
-    '25':  WeatherCode('Muy nuboso con lluvia escasa', LucideIcons.cloudDrizzle),
-    '25n': WeatherCode('Muy nuboso con lluvia escasa noche', LucideIcons.cloudDrizzle),
+    // --- 71, 73, 75: Nieve ---
+    '71': WeatherCode('Nieve débil', LucideIcons.cloudSnow),
+    '71n': WeatherCode('Nieve débil', LucideIcons.cloudSnow),
+    '73': WeatherCode('Nieve moderada', LucideIcons.cloudSnow),
+    '73n': WeatherCode('Nieve moderada', LucideIcons.cloudSnow),
+    '75': WeatherCode('Nieve fuerte', LucideIcons.cloudSnow),
+    '75n': WeatherCode('Nieve fuerte', LucideIcons.cloudSnow),
 
-    // --- Cubierto con lluvia escasa ---
-    '26':  WeatherCode('Cubierto con lluvia escasa', LucideIcons.cloudDrizzle),
-    '26n': WeatherCode('Cubierto con lluvia escasa noche', LucideIcons.cloudDrizzle),
+    // --- 77: Granizo ---
+    '77': WeatherCode('Granizo menudo', LucideIcons.cloudSnow),
+    '77n': WeatherCode('Granizo menudo', LucideIcons.cloudSnow),
 
-    // --- Intervalos nubosos con lluvia ---
-    '33':  WeatherCode('Intervalos nubosos con lluvia', LucideIcons.cloudRain),
-    '33n': WeatherCode('Intervalos nubosos con lluvia noche', LucideIcons.cloudRain),
+    // --- 80, 81, 82: Chubascos de lluvia ---
+    '80': WeatherCode('Chubascos débiles', LucideIcons.cloudRain),
+    '80n': WeatherCode('Chubascos débiles', LucideIcons.cloudRain),
+    '81': WeatherCode('Chubascos moderados', LucideIcons.cloudRain),
+    '81n': WeatherCode('Chubascos moderados', LucideIcons.cloudRain),
+    '82': WeatherCode('Chubascos fuertes', LucideIcons.cloudRain),
+    '82n': WeatherCode('Chubascos fuertes', LucideIcons.cloudRain),
 
-    // --- Nuboso con lluvia ---
-    '34':  WeatherCode('Nuboso con lluvia', LucideIcons.cloudRain),
-    '34n': WeatherCode('Nuboso con lluvia noche', LucideIcons.cloudRain),
+    // --- 85, 86: Chubascos de nieve ---
+    '85': WeatherCode('Chubascos de nieve débiles', LucideIcons.cloudSnow),
+    '85n': WeatherCode('Chubascos de nieve débiles', LucideIcons.cloudSnow),
+    '86': WeatherCode('Chubascos de nieve fuertes', LucideIcons.cloudSnow),
+    '86n': WeatherCode('Chubascos de nieve fuertes', LucideIcons.cloudSnow),
 
-    // --- Muy nuboso con lluvia ---
-    '35':  WeatherCode('Muy nuboso con lluvia', LucideIcons.cloudRain),
-    '35n': WeatherCode('Muy nuboso con lluvia noche', LucideIcons.cloudRain),
+    // --- 95: Tormenta ---
+    '95': WeatherCode('Tormenta', LucideIcons.cloudLightning),
+    '95n': WeatherCode('Tormenta', LucideIcons.cloudLightning),
 
-    // --- Cubierto con lluvia ---
-    '36':  WeatherCode('Cubierto con lluvia', LucideIcons.cloudRain),
-    '36n': WeatherCode('Cubierto con lluvia noche', LucideIcons.cloudRain),
-
-    // --- Intervalos nubosos con nieve escasa ---
-    '43':  WeatherCode('Intervalos nubosos con nieve escasa', LucideIcons.cloudSnow),
-    '43n': WeatherCode('Intervalos nubosos con nieve escasa noche', LucideIcons.cloudSnow),
-
-    // --- Nuboso con nieve escasa ---
-    '44':  WeatherCode('Nuboso con nieve escasa', LucideIcons.cloudSnow),
-    '44n': WeatherCode('Nuboso con nieve escasa noche', LucideIcons.cloudSnow),
-
-    // --- Muy nuboso con nieve escasa ---
-    '45':  WeatherCode('Muy nuboso con nieve escasa', LucideIcons.cloudSnow),
-    '45n': WeatherCode('Muy nuboso con nieve escasa noche', LucideIcons.cloudSnow),
-
-    // --- Cubierto con nieve escasa ---
-    '46':  WeatherCode('Cubierto con nieve escasa', LucideIcons.cloudSnow),
-    '46n': WeatherCode('Cubierto con nieve escasa noche', LucideIcons.cloudSnow),
-
-    // --- Intervalos nubosos con tormenta ---
-    '51':  WeatherCode('Intervalos nubosos con tormenta', LucideIcons.cloudLightning),
-    '51n': WeatherCode('Intervalos nubosos con tormenta noche', LucideIcons.cloudLightning),
-
-    // --- Nuboso con tormenta ---
-    '52':  WeatherCode('Nuboso con tormenta', LucideIcons.cloudLightning),
-    '52n': WeatherCode('Nuboso con tormenta noche', LucideIcons.cloudLightning),
-
-    // --- Muy nuboso con tormenta ---
-    '53':  WeatherCode('Muy nuboso con tormenta', LucideIcons.cloudLightning),
-    '53n': WeatherCode('Muy nuboso con tormenta noche', LucideIcons.cloudLightning),
-
-    // --- Cubierto con tormenta ---
-    '54':  WeatherCode('Cubierto con tormenta', LucideIcons.cloudLightning),
-    '54n': WeatherCode('Cubierto con tormenta noche', LucideIcons.cloudLightning),
-
-    // --- Intervalos nubosos con tormenta y lluvia escasa ---
-    '61':  WeatherCode('Intervalos nubosos con tormenta y lluvia escasa', LucideIcons.cloudLightning),
-    '61n': WeatherCode('Intervalos nubosos con tormenta y lluvia escasa noche', LucideIcons.cloudLightning),
-
-    // --- Nuboso con tormenta y lluvia escasa ---
-    '62':  WeatherCode('Nuboso con tormenta y lluvia escasa', LucideIcons.cloudLightning),
-    '62n': WeatherCode('Nuboso con tormenta y lluvia escasa noche', LucideIcons.cloudLightning),
-
-    // --- Muy nuboso con tormenta y lluvia escasa ---
-    '63':  WeatherCode('Muy nuboso con tormenta y lluvia escasa', LucideIcons.cloudLightning),
-    '63n': WeatherCode('Muy nuboso con tormenta y lluvia escasa noche', LucideIcons.cloudLightning),
-
-    // --- Cubierto con tormenta y lluvia escasa ---
-    '64':  WeatherCode('Cubierto con tormenta y lluvia escasa', LucideIcons.cloudLightning),
-    '64n': WeatherCode('Cubierto con tormenta y lluvia escasa noche', LucideIcons.cloudLightning),
-
-    // --- Intervalos nubosos con nieve ---
-    '71':  WeatherCode('Intervalos nubosos con nieve', LucideIcons.cloudSnow),
-    '71n': WeatherCode('Intervalos nubosos con nieve noche', LucideIcons.cloudSnow),
-
-    // --- Nuboso con nieve ---
-    '72':  WeatherCode('Nuboso con nieve', LucideIcons.cloudSnow),
-    '72n': WeatherCode('Nuboso con nieve noche', LucideIcons.cloudSnow),
-
-    // --- Muy nuboso con nieve ---
-    '73':  WeatherCode('Muy nuboso con nieve', LucideIcons.cloudSnow),
-    '73n': WeatherCode('Muy nuboso con nieve noche', LucideIcons.cloudSnow),
-
-    // --- Cubierto con nieve ---
-    '74':  WeatherCode('Cubierto con nieve', LucideIcons.cloudSnow),
-    '74n': WeatherCode('Cubierto con nieve noche', LucideIcons.cloudSnow),
-
-    // --- Niebla ---
-    '81':  WeatherCode('Niebla', LucideIcons.cloudFog),
-    '81n': WeatherCode('Niebla noche', LucideIcons.cloudFog),
-
-    // --- Bruma ---
-    '82':  WeatherCode('Bruma', LucideIcons.cloudFog),
-    '82n': WeatherCode('Bruma noche', LucideIcons.cloudFog),
-
-    // --- Calima ---
-    '83':  WeatherCode('Calima', LucideIcons.haze),
-    '83n': WeatherCode('Calima noche', LucideIcons.haze),
+    // --- 96, 99: Tormenta con granizo ---
+    '96': WeatherCode('Tormenta con granizo', LucideIcons.cloudLightning),
+    '96n': WeatherCode('Tormenta con granizo', LucideIcons.cloudLightning),
+    '99': WeatherCode('Tormenta con granizo fuerte', LucideIcons.cloudLightning),
+    '99n': WeatherCode('Tormenta con granizo fuerte', LucideIcons.cloudLightning),
   };
 
   /// Obtiene el código de tiempo; si no se encuentra, devuelve un valor por defecto.

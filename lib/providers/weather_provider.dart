@@ -17,7 +17,7 @@ import 'dart:async';
 /// Gestiona una lista de localizaciones guardadas, con caché de datos
 /// por ciudad para evitar recargas al deslizar el PageView.
 class WeatherProvider extends ChangeNotifier {
-  final AemetApiService _apiService;
+  final OpenMeteoApiService _apiService;
   final MunicipioSearchService _searchService;
   final LocationService _locationService;
   final AlertService _alertService;
@@ -191,11 +191,11 @@ class WeatherProvider extends ChangeNotifier {
   }
 
   WeatherProvider({
-    AemetApiService? apiService,
+    OpenMeteoApiService? apiService,
     MunicipioSearchService? searchService,
     LocationService? locationService,
     AlertService? alertService,
-  })  : _apiService = apiService ?? AemetApiService(),
+  })  : _apiService = apiService ?? OpenMeteoApiService(),
         _searchService = searchService ?? MunicipioSearchService(),
         _locationService = locationService ?? LocationService(),
         _alertService = alertService ?? AlertService() {
@@ -261,13 +261,13 @@ class WeatherProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final results = await Future.wait([
-        _apiService.fetchDailyForecast(municipioId),
-        _apiService.fetchHourlyForecast(municipioId),
-      ]);
+      final coords = await _searchService.getCoordinates(municipioId);
+      if (coords == null) throw Exception('No se encontraron coordenadas para la ubicación');
 
-      final dailyList = DailyForecast.fromAemetJson(results[0]);
-      final hourlyList = HourlyForecast.fromAemetJson(results[1]);
+      final result = await _apiService.fetchForecast(coords.lat, coords.lon);
+
+      final dailyList = DailyForecast.fromOpenMeteoJson(result);
+      final hourlyList = HourlyForecast.fromOpenMeteoJson(result);
       final updatedTime = DateTime.now();
 
       _cache[municipioId] = (
@@ -283,15 +283,14 @@ class WeatherProvider extends ChangeNotifier {
       // Persistir en memoria física al terminar la descarga API
       await _persistWeatherData(
         municipioId,
-        results[0],
-        results[1],
+        result,
         _alertsCache[municipioId] ?? [], // Pasamos las alertas obtenidas
         updatedTime,
       );
 
       // Actualizar fase solar
       await _updateSunPhase();
-    } on AemetApiException catch (e) {
+    } on OpenMeteoApiException catch (e) {
       _errorMap[municipioId] = e.message;
     } catch (e) {
       _errorMap[municipioId] = 'Error de conexión: $e';
@@ -346,13 +345,13 @@ class WeatherProvider extends ChangeNotifier {
   /// Recarga datos sin mostrar estado de carga (mantiene datos anteriores visibles).
   Future<void> _silentLoadWeather(String municipioId) async {
     try {
-      final results = await Future.wait([
-        _apiService.fetchDailyForecast(municipioId),
-        _apiService.fetchHourlyForecast(municipioId),
-      ]);
+      final coords = await _searchService.getCoordinates(municipioId);
+      if (coords == null) throw Exception('No coord');
 
-      final dailyList = DailyForecast.fromAemetJson(results[0]);
-      final hourlyList = HourlyForecast.fromAemetJson(results[1]);
+      final result = await _apiService.fetchForecast(coords.lat, coords.lon);
+
+      final dailyList = DailyForecast.fromOpenMeteoJson(result);
+      final hourlyList = HourlyForecast.fromOpenMeteoJson(result);
       final updatedTime = DateTime.now();
 
       _cache[municipioId] = (
@@ -366,8 +365,7 @@ class WeatherProvider extends ChangeNotifier {
 
       await _persistWeatherData(
         municipioId,
-        results[0],
-        results[1],
+        result,
         _alertsCache[municipioId] ?? [],
         updatedTime,
       );
@@ -555,15 +553,13 @@ class WeatherProvider extends ChangeNotifier {
 
   Future<void> _persistWeatherData(
       String municipioId, 
-      List<dynamic> rawDaily, 
-      List<dynamic> rawHourly,
+      Map<String, dynamic> openMeteoJson,
       List<WeatherAlert> currentAlerts,
       DateTime updateTime,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final dataString = jsonEncode({
-      'daily': rawDaily,
-      'hourly': rawHourly,
+      'openMeteo': openMeteoJson,
       'alerts': currentAlerts.map((a) => a.toJson()).toList(), // Serializamos alertas
       'sunTimes': _sunTimesCache[municipioId] != null ? {
         'sunrise': _sunTimesCache[municipioId]!.sunrise.toIso8601String(),
@@ -584,8 +580,10 @@ class WeatherProvider extends ChangeNotifier {
       if (jsonStr != null) {
         try {
           final Map<String, dynamic> decoded = jsonDecode(jsonStr);
-          final daily = DailyForecast.fromAemetJson(decoded['daily']);
-          final hourly = HourlyForecast.fromAemetJson(decoded['hourly']);
+          if (!decoded.containsKey('openMeteo')) throw Exception('Old data format');
+          
+          final daily = DailyForecast.fromOpenMeteoJson(decoded['openMeteo']);
+          final hourly = HourlyForecast.fromOpenMeteoJson(decoded['openMeteo']);
           final updated = DateTime.parse(decoded['lastUpdated']);
           
           // Rehidratar alertas si existen en el JSON antiguo/nuevo

@@ -1,7 +1,8 @@
-/// Modelo para la predicción meteorológica diaria de AEMET.
+import 'weather_enums.dart';
+
+/// Modelo para la predicción meteorológica diaria.
 ///
-/// Parsea el complejo JSON de la API de AEMET, extrayendo temperatura
-/// máxima/mínima, estado del cielo y probabilidad de precipitación.
+/// Parsea el JSON array de la API de Open Meteo.
 class DailyForecast {
   final DateTime date;
   final int? tempMax;
@@ -19,83 +20,35 @@ class DailyForecast {
     this.precipitationProbability,
   });
 
-  /// Parsea la lista de predicciones diarias del JSON de AEMET.
-  ///
-  /// La estructura del JSON de AEMET es compleja:
-  /// ```json
-  /// [{ "prediccion": { "dia": [
-  ///   { "fecha": "2024-01-01T00:00:00",
-  ///     "temperatura": { "maxima": 15, "minima": 5 },
-  ///     "estadoCielo": [{ "value": "12", "descripcion": "Poco nuboso", "periodo": "00-24" }],
-  ///     "probPrecipitacion": [{ "value": 10, "periodo": "00-24" }]
-  ///   }, ...
-  /// ] } }]
-  /// ```
-  static List<DailyForecast> fromAemetJson(List<dynamic> json) {
+  /// Parsea la respuesta "columbar" (arrays paralelos) de Open Meteo bajo la clave "daily".
+  static List<DailyForecast> fromOpenMeteoJson(Map<String, dynamic> json) {
     final List<DailyForecast> forecasts = [];
 
-    if (json.isEmpty) return forecasts;
+    final daily = json['daily'];
+    if (daily == null) return forecasts;
 
-    final prediccion = json[0]['prediccion'];
-    if (prediccion == null) return forecasts;
+    final time = daily['time'] as List<dynamic>? ?? [];
+    final weatherCode = daily['weather_code'] as List<dynamic>? ?? [];
+    final tempMax = daily['temperature_2m_max'] as List<dynamic>? ?? [];
+    final tempMin = daily['temperature_2m_min'] as List<dynamic>? ?? [];
+    final precipProb = daily['precipitation_probability_max'] as List<dynamic>? ?? [];
 
-    final dias = prediccion['dia'] as List<dynamic>? ?? [];
+    for (int i = 0; i < time.length; i++) {
+        final date = DateTime.tryParse(time[i] as String);
+        if (date == null) continue;
 
-    for (final dia in dias) {
-      try {
-        final fecha = DateTime.parse(dia['fecha'] as String);
-
-        // Temperaturas máxima y mínima
-        final temp = dia['temperatura'] as Map<String, dynamic>?;
-        final maxima = temp?['maxima'];
-        final minima = temp?['minima'];
-
-        // Estado del cielo: tomamos el primer valor con periodo "00-24"
-        // o el primer valor disponible
-        final estadoCielo = dia['estadoCielo'] as List<dynamic>? ?? [];
-        String skyCode = '';
-        String skyDesc = '';
-        for (final estado in estadoCielo) {
-          final value = estado['value']?.toString() ?? '';
-          if (value.isNotEmpty) {
-            skyCode = value;
-            skyDesc = estado['descripcion']?.toString() ?? '';
-            // Preferimos el periodo de todo el día
-            final periodo = estado['periodo']?.toString() ?? '';
-            if (periodo == '00-24') break;
-          }
-        }
-
-        // Probabilidad de precipitación: tomamos el mayor valor del día
-        final probPrecip =
-            dia['probPrecipitacion'] as List<dynamic>? ?? [];
-        int? maxPrecipProb;
-        for (final prob in probPrecip) {
-          final value = prob['value'];
-          if (value != null) {
-            final intVal = value is int ? value : int.tryParse(value.toString());
-            if (intVal != null) {
-              maxPrecipProb = (maxPrecipProb == null)
-                  ? intVal
-                  : (intVal > maxPrecipProb ? intVal : maxPrecipProb);
-            }
-          }
-        }
-
+        final codeVal = weatherCode.length > i ? weatherCode[i]?.toString() : null;
+        final skyCodeOb = WeatherCode.fromCode(codeVal);
+        
         forecasts.add(DailyForecast(
-          date: fecha,
-          tempMax: maxima is int ? maxima : int.tryParse(maxima?.toString() ?? ''),
-          tempMin: minima is int ? minima : int.tryParse(minima?.toString() ?? ''),
-          skyStateCode: skyCode,
-          skyDescription: skyDesc,
-          precipitationProbability: maxPrecipProb,
+          date: date,
+          tempMax: tempMax.length > i ? (tempMax[i] as num?)?.round() : null,
+          tempMin: tempMin.length > i ? (tempMin[i] as num?)?.round() : null,
+          skyStateCode: codeVal ?? '',
+          skyDescription: skyCodeOb.description,
+          precipitationProbability: precipProb.length > i ? (precipProb[i] as num?)?.round() : null,
         ));
-      } catch (e) {
-        // Si falla el parseo de un día, continuamos con el siguiente
-        continue;
-      }
     }
-
     return forecasts;
   }
 }
