@@ -139,18 +139,18 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: const AppDrawer(),
       body: Consumer<WeatherProvider>(
         builder: (context, provider, _) {
-          // AnimatedBuilder escucha la posición continua del PageController
+          // El contenido se pasa como `child` del AnimatedBuilder para que
+          // NO se reconstruya en cada frame del scroll — solo el gradiente.
           return AnimatedBuilder(
             animation: _pageController,
-            builder: (context, _) {
+            child: SafeArea(
+              child: _buildBodyContent(context, provider),
+            ),
+            builder: (context, child) {
               final gradient = _interpolatedGradient(provider);
-              return AnimatedContainer(
-                duration: const Duration(seconds: 2),
-                curve: Curves.easeInOut,
+              return DecoratedBox(
                 decoration: BoxDecoration(gradient: gradient),
-                child: SafeArea(
-                  child: _buildBodyContent(context, provider),
-                ),
+                child: child,
               );
             },
           );
@@ -186,10 +186,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
 
+  // Flag para evitar que el postFrameCallback luche contra el gesto del usuario
+  bool _isUserSwiping = false;
+
   Widget _buildBodyContent(BuildContext context, WeatherProvider provider) {
-    // Sincronizar PageController con el índice del provider
+    // Sincronizar PageController con el índice del provider SOLO
+    // cuando el cambio viene del provider (ej: añadir ciudad), no del swipe.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_pageController.hasClients &&
+      if (!_isUserSwiping &&
+          _pageController.hasClients &&
           _pageController.page?.round() != provider.currentIndex) {
         _pageController.animateToPage(
           provider.currentIndex,
@@ -207,20 +212,30 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: provider.savedLocations.isEmpty
               ? _buildWelcomeState(context)
-              : PageView.builder(
-                  controller: _pageController,
-                  itemCount: provider.savedLocations.length,
-                  onPageChanged: (index) {
-                    provider.switchToIndex(index);
+              : NotificationListener<ScrollNotification>(
+                  onNotification: (notification) {
+                    if (notification is ScrollStartNotification) {
+                      _isUserSwiping = true;
+                    } else if (notification is ScrollEndNotification) {
+                      _isUserSwiping = false;
+                    }
+                    return false;
                   },
-                  itemBuilder: (context, index) {
-                    final loc = provider.savedLocations[index];
-                    return _WeatherPage(
-                      municipioId: loc.municipioId,
-                      pageIndex: index,
-                      pageController: _pageController,
-                    );
-                  },
+                  child: PageView.builder(
+                    controller: _pageController,
+                    itemCount: provider.savedLocations.length,
+                    onPageChanged: (index) {
+                      provider.switchToIndex(index);
+                    },
+                    itemBuilder: (context, index) {
+                      final loc = provider.savedLocations[index];
+                      return _WeatherPage(
+                        municipioId: loc.municipioId,
+                        pageIndex: index,
+                        pageController: _pageController,
+                      );
+                    },
+                  ),
                 ),
         ),
       ],
