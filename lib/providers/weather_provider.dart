@@ -10,6 +10,7 @@ import '../services/api_service.dart';
 import '../services/location_service.dart';
 import '../services/municipio_search_service.dart';
 import '../utils/sun_calculator.dart';
+import '../models/weather_enums.dart';
 import 'dart:async';
 
 /// Provider principal para la gestión del estado meteorológico.
@@ -111,6 +112,10 @@ class WeatherProvider extends ChangeNotifier {
     if (forecasts.isEmpty) return '';
     return _closestHourly(forecasts).skyStateCode;
   }
+
+  /// Condición del cielo actual clasificada en 3 categorías.
+  SkyCondition get currentSkyCondition =>
+      SkyCondition.fromCode(currentSkyCode);
 
   /// Descripción del cielo actual.
   String get currentSkyDescription {
@@ -677,9 +682,61 @@ class WeatherProvider extends ChangeNotifier {
 
   /// Gradiente de fondo según la fase solar actual.
   LinearGradient get backgroundGradient {
+    final sky = currentSkyCondition;
+
     switch (_currentPhase) {
+      case SunPhase.day:
+        return _dayGradient(sky);
       case SunPhase.sunrise:
-        // Azul oscuro a naranjas/rosas suaves
+        return _sunriseGradient(sky);
+      case SunPhase.sunset:
+        return _sunsetGradient(sky);
+      default:
+        return _nightGradient(sky);
+    }
+  }
+
+  // --- Gradientes de DÍA ---
+  LinearGradient _dayGradient(SkyCondition sky) {
+    switch (sky) {
+      case SkyCondition.clear:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF0F5298), // Índigo intenso
+            Color(0xFF3C99DC), // Azul cielo claro
+          ],
+        );
+      case SkyCondition.partlyCloudy:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF4A6B8A), // Azul acero
+            Color(0xFF7A8FA0), // Gris azulado
+            Color(0xFF9EAAB6), // Gris claro azulado
+          ],
+          stops: [0.0, 0.5, 1.0],
+        );
+      case SkyCondition.overcast:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF4B5563), // Gris plomo
+            Color(0xFF6B7280), // Gris medio
+            Color(0xFF555E69), // Gris oscuro
+          ],
+          stops: [0.0, 0.5, 1.0],
+        );
+    }
+  }
+
+  // --- Gradientes de AMANECER ---
+  LinearGradient _sunriseGradient(SkyCondition sky) {
+    switch (sky) {
+      case SkyCondition.clear:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -691,18 +748,36 @@ class WeatherProvider extends ChangeNotifier {
           ],
           stops: [0.0, 0.4, 0.8, 1.0],
         );
-      case SunPhase.day:
-        // Azul cielo brillante pero contrastado
+      case SkyCondition.partlyCloudy:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF0F5298), // Índigo intenso
-            Color(0xFF3C99DC), // Azul cielo claro
+            Color(0xFF2C3E50), // Azul grisáceo oscuro
+            Color(0xFF5D6D7E), // Gris azulado
+            Color(0xFF9B6B8A), // Rosa apagado
+            Color(0xFF8E99A4), // Gris lavanda
           ],
+          stops: [0.0, 0.35, 0.7, 1.0],
         );
-      case SunPhase.sunset:
-        // Naranja rojizo a morado intenso
+      case SkyCondition.overcast:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF3D3D3D), // Gris oscuro
+            Color(0xFF5A5050), // Gris rosáceo
+            Color(0xFF6B6360), // Gris cálido
+          ],
+          stops: [0.0, 0.5, 1.0],
+        );
+    }
+  }
+
+  // --- Gradientes de ATARDECER ---
+  LinearGradient _sunsetGradient(SkyCondition sky) {
+    switch (sky) {
+      case SkyCondition.clear:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -713,18 +788,67 @@ class WeatherProvider extends ChangeNotifier {
           ],
           stops: [0.0, 0.6, 1.0],
         );
-      default:
-        // Azul noche profundo a negro (Original)
+      case SkyCondition.partlyCloudy:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF3D3456), // Morado grisáceo
+            Color(0xFF8A5A6A), // Rosa apagado
+            Color(0xFF7A6E65), // Gris cálido
+          ],
+          stops: [0.0, 0.5, 1.0],
+        );
+      case SkyCondition.overcast:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF3D3D3D), // Gris oscuro
+            Color(0xFF5A4A4A), // Gris rojizo apagado
+            Color(0xFF4A4545), // Gris carbón
+          ],
+          stops: [0.0, 0.5, 1.0],
+        );
+    }
+  }
+
+  // --- Gradientes de NOCHE ---
+  LinearGradient _nightGradient(SkyCondition sky) {
+    switch (sky) {
+      case SkyCondition.clear:
         return LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            const Color(0xFF1A1A2E),
+            const Color(0xFF1A1A2E), // Azul noche profundo
             const Color(0xFF16213E),
             const Color(0xFF0F3460),
             Colors.black.withValues(alpha: 0.9),
           ],
           stops: const [0.0, 0.3, 0.7, 1.0],
+        );
+      case SkyCondition.partlyCloudy:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF1C2333), // Azul grisáceo oscuro
+            Color(0xFF2A2F3D), // Gris azulado
+            Color(0xFF252830), // Carbón
+          ],
+          stops: [0.0, 0.5, 1.0],
+        );
+      case SkyCondition.overcast:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF1A1A1E), // Gris muy oscuro (sin azul)
+            Color(0xFF252528), // Gris oscuro neutro
+            Color(0xFF1E1E20), // Casi negro
+          ],
+          stops: [0.0, 0.5, 1.0],
         );
     }
   }

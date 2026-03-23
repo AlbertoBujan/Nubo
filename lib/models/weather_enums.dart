@@ -120,3 +120,29 @@ class WeatherCode {
     return codes[code] ?? const WeatherCode('Desconocido', LucideIcons.cloudOff);
   }
 }
+
+/// Clasificación del estado del cielo en 3 categorías para el fondo dinámico.
+enum SkyCondition {
+  /// Despejado o poco nuboso (códigos WMO 0, 1)
+  clear,
+
+  /// Intervalos nubosos, cubierto, niebla (códigos WMO 2, 3, 45, 48)
+  partlyCloudy,
+
+  /// Precipitación: lluvia, llovizna, nieve, tormenta, granizo (códigos WMO 51+)
+  overcast;
+
+  /// Clasifica un código WMO (con posible sufijo 'n' de noche) en una categoría.
+  static SkyCondition fromCode(String? code) {
+    if (code == null || code.isEmpty) return clear;
+
+    // Extraer la parte numérica (quitar sufijo 'n' si existe)
+    final numericStr = code.replaceAll('n', '');
+    final numeric = int.tryParse(numericStr);
+    if (numeric == null) return clear;
+
+    if (numeric <= 1) return clear;
+    if (numeric <= 3 || numeric == 45 || numeric == 48) return partlyCloudy;
+    return overcast; // 51+ (lluvia, nieve, tormenta, etc.)
+  }
+}
