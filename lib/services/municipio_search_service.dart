@@ -23,7 +23,7 @@ class MunicipioSearchService {
       : _client = client ?? http.Client();
 
   /// Petición con reintento y timeout
-  Future<http.Response> _getWithRetry(String url, {Map<String, String>? headers}) async {
+  Future<http.Response> _getWithRetry(String url, {Map<String, String>? headers, Duration timeout = const Duration(seconds: 15)}) async {
     const int maxRetries = 3;
     int retryDelayMillis = 500;
 
@@ -31,7 +31,7 @@ class MunicipioSearchService {
       try {
         final response = await _client
             .get(Uri.parse(url), headers: headers)
-            .timeout(const Duration(seconds: 2));
+            .timeout(timeout);
         
         if (response.statusCode == 429 && attempt < maxRetries) {
           await Future.delayed(Duration(milliseconds: retryDelayMillis));
@@ -67,7 +67,7 @@ class MunicipioSearchService {
       final datosUrl = body1['datos'] as String?;
       if (datosUrl == null) return;
 
-      final response2 = await _getWithRetry(datosUrl);
+      final response2 = await _getWithRetry(datosUrl, timeout: const Duration(seconds: 30));
       if (response2.statusCode != 200) return;
 
       String decoded;
