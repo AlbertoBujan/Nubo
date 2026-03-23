@@ -350,40 +350,49 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
 
-          // Dots de navegación centrados de manera absoluta
-          SizedBox(
-            height: 36, // Misma altura que el IconButton
-            child: Row(
-              mainAxisSize: MainAxisSize.min, // Contrae el Row a su contenido exacto
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                provider.savedLocations.length,
-                (i) => GestureDetector(
-                  onTap: () {
-                    _pageController.animateToPage(
-                      i,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  },
-                  onLongPress: provider.savedLocations.length > 1
-                      ? () => _confirmRemove(context, provider, i)
-                      : null,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: provider.currentIndex == i ? 18 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: provider.currentIndex == i
-                          ? Colors.white
-                          : Colors.white30,
-                      borderRadius: BorderRadius.circular(3),
+          // Dots de navegación centrados — escuchan el PageController directamente
+          // para evitar rebuilds del provider durante el swipe.
+          AnimatedBuilder(
+            animation: _pageController,
+            builder: (context, _) {
+              final activeDot = _pageController.hasClients
+                  ? (_pageController.page?.round() ?? provider.currentIndex)
+                  : provider.currentIndex;
+              return SizedBox(
+                height: 36,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    provider.savedLocations.length,
+                    (i) => GestureDetector(
+                      onTap: () {
+                        _pageController.animateToPage(
+                          i,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      },
+                      onLongPress: provider.savedLocations.length > 1
+                          ? () => _confirmRemove(context, provider, i)
+                          : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: activeDot == i ? 18 : 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: activeDot == i
+                              ? Colors.white
+                              : Colors.white30,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ],
       ),

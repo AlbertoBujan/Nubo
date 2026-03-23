@@ -483,8 +483,13 @@ class WeatherProvider extends ChangeNotifier {
     _currentIndex = index;
     notifyListeners();
 
-    // Verificamos si hay alertas por cargar y si fase solar cambió, 
-    // pero omitimos loadWeather porque dependemos del refresco manual
+    // Diferir trabajo pesado para no provocar rebuilds durante la animación del swipe.
+    // _loadAlerts y _updateSunPhase disparan notifyListeners() adicionales.
+    await Future.delayed(const Duration(milliseconds: 400));
+
+    // Verificar que el índice no haya cambiado durante la espera (swipes rápidos)
+    if (_currentIndex != index) return;
+
     final id = _savedLocations[index].municipioId;
     if (!_alertsCache.containsKey(id)) {
         _loadAlerts(id);

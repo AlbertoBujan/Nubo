@@ -1,7 +1,7 @@
 name: nubo
 description: "App meteorológica Flutter - AEMET"
 publish_to: 'none'
-version: 0.1.21
+version: 0.1.22
 
 environment:
   sdk: ^3.10.8
