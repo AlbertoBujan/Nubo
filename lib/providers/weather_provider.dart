@@ -680,9 +680,13 @@ class WeatherProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Gradiente de fondo según la fase solar actual.
-  LinearGradient get backgroundGradient {
-    final sky = currentSkyCondition;
+  /// Gradiente de fondo según la fase solar y cielo del municipio activo.
+  LinearGradient get backgroundGradient => gradientForMunicipio(currentMunicipioId);
+
+  /// Gradiente de fondo para un municipio concreto (usado para interpolar en swipe).
+  LinearGradient gradientForMunicipio(String id) {
+    final skyCode = id.isNotEmpty ? currentSkyCodeFor(id) : '';
+    final sky = SkyCondition.fromCode(skyCode);
 
     switch (_currentPhase) {
       case SunPhase.day:
@@ -696,7 +700,22 @@ class WeatherProvider extends ChangeNotifier {
     }
   }
 
-  // --- Gradientes de DÍA ---
+  /// Interpola linealmente entre dos gradientes (ambos deben tener 4 colores).
+  static LinearGradient lerpGradient(LinearGradient a, LinearGradient b, double t) {
+    return LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Color.lerp(a.colors[0], b.colors[0], t)!,
+        Color.lerp(a.colors[1], b.colors[1], t)!,
+        Color.lerp(a.colors[2], b.colors[2], t)!,
+        Color.lerp(a.colors[3], b.colors[3], t)!,
+      ],
+      stops: const [0.0, 0.33, 0.67, 1.0],
+    );
+  }
+
+  // --- Gradientes de DÍA (4 stops) ---
   LinearGradient _dayGradient(SkyCondition sky) {
     switch (sky) {
       case SkyCondition.clear:
@@ -704,36 +723,41 @@ class WeatherProvider extends ChangeNotifier {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF0F5298), // Índigo intenso
-            Color(0xFF3C99DC), // Azul cielo claro
+            Color(0xFF0F5298),
+            Color(0xFF1F73BA),
+            Color(0xFF3C99DC),
+            Color(0xFF4DA8E8),
           ],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
       case SkyCondition.partlyCloudy:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF4A6B8A), // Azul acero
-            Color(0xFF7A8FA0), // Gris azulado
-            Color(0xFF9EAAB6), // Gris claro azulado
+            Color(0xFF4A6B8A),
+            Color(0xFF627D96),
+            Color(0xFF7A8FA0),
+            Color(0xFF9EAAB6),
           ],
-          stops: [0.0, 0.5, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
       case SkyCondition.overcast:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF4B5563), // Gris plomo
-            Color(0xFF6B7280), // Gris medio
-            Color(0xFF555E69), // Gris oscuro
+            Color(0xFF4B5563),
+            Color(0xFF5A6370),
+            Color(0xFF6B7280),
+            Color(0xFF555E69),
           ],
-          stops: [0.0, 0.5, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
     }
   }
 
-  // --- Gradientes de AMANECER ---
+  // --- Gradientes de AMANECER (4 stops) ---
   LinearGradient _sunriseGradient(SkyCondition sky) {
     switch (sky) {
       case SkyCondition.clear:
@@ -741,40 +765,41 @@ class WeatherProvider extends ChangeNotifier {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF141E30), // Azul noche
-            Color(0xFF243B55), // Azul grisáceo
-            Color(0xFFCC2B5E), // Rosa intenso
-            Color(0xFF753A88), // Morado
+            Color(0xFF141E30),
+            Color(0xFF243B55),
+            Color(0xFFCC2B5E),
+            Color(0xFF753A88),
           ],
-          stops: [0.0, 0.4, 0.8, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
       case SkyCondition.partlyCloudy:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF2C3E50), // Azul grisáceo oscuro
-            Color(0xFF5D6D7E), // Gris azulado
-            Color(0xFF9B6B8A), // Rosa apagado
-            Color(0xFF8E99A4), // Gris lavanda
+            Color(0xFF2C3E50),
+            Color(0xFF5D6D7E),
+            Color(0xFF9B6B8A),
+            Color(0xFF8E99A4),
           ],
-          stops: [0.0, 0.35, 0.7, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
       case SkyCondition.overcast:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF3D3D3D), // Gris oscuro
-            Color(0xFF5A5050), // Gris rosáceo
-            Color(0xFF6B6360), // Gris cálido
+            Color(0xFF3D3D3D),
+            Color(0xFF4B4646),
+            Color(0xFF5A5050),
+            Color(0xFF6B6360),
           ],
-          stops: [0.0, 0.5, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
     }
   }
 
-  // --- Gradientes de ATARDECER ---
+  // --- Gradientes de ATARDECER (4 stops) ---
   LinearGradient _sunsetGradient(SkyCondition sky) {
     switch (sky) {
       case SkyCondition.clear:
@@ -782,76 +807,82 @@ class WeatherProvider extends ChangeNotifier {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF3E1E68), // Morado oscuro
-            Color(0xFFC6426E), // Rosa rojizo
-            Color(0xFFF9A825), // Naranja/Amarillo
+            Color(0xFF3E1E68),
+            Color(0xFF82306B),
+            Color(0xFFC6426E),
+            Color(0xFFF9A825),
           ],
-          stops: [0.0, 0.6, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
       case SkyCondition.partlyCloudy:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF3D3456), // Morado grisáceo
-            Color(0xFF8A5A6A), // Rosa apagado
-            Color(0xFF7A6E65), // Gris cálido
+            Color(0xFF3D3456),
+            Color(0xFF634760),
+            Color(0xFF8A5A6A),
+            Color(0xFF7A6E65),
           ],
-          stops: [0.0, 0.5, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
       case SkyCondition.overcast:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF3D3D3D), // Gris oscuro
-            Color(0xFF5A4A4A), // Gris rojizo apagado
-            Color(0xFF4A4545), // Gris carbón
+            Color(0xFF3D3D3D),
+            Color(0xFF4C4444),
+            Color(0xFF5A4A4A),
+            Color(0xFF4A4545),
           ],
-          stops: [0.0, 0.5, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
     }
   }
 
-  // --- Gradientes de NOCHE ---
+  // --- Gradientes de NOCHE (4 stops) ---
   LinearGradient _nightGradient(SkyCondition sky) {
     switch (sky) {
       case SkyCondition.clear:
-        return LinearGradient(
+        return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            const Color(0xFF1A1A2E), // Azul noche profundo
-            const Color(0xFF16213E),
-            const Color(0xFF0F3460),
-            Colors.black.withValues(alpha: 0.9),
+            Color(0xFF1A1A2E),
+            Color(0xFF16213E),
+            Color(0xFF0F3460),
+            Color(0xFF0A0A12),
           ],
-          stops: const [0.0, 0.3, 0.7, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
       case SkyCondition.partlyCloudy:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF1C2333), // Azul grisáceo oscuro
-            Color(0xFF2A2F3D), // Gris azulado
-            Color(0xFF252830), // Carbón
+            Color(0xFF1C2333),
+            Color(0xFF232938),
+            Color(0xFF2A2F3D),
+            Color(0xFF252830),
           ],
-          stops: [0.0, 0.5, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
       case SkyCondition.overcast:
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF1A1A1E), // Gris muy oscuro (sin azul)
-            Color(0xFF252528), // Gris oscuro neutro
-            Color(0xFF1E1E20), // Casi negro
+            Color(0xFF1A1A1E),
+            Color(0xFF202023),
+            Color(0xFF252528),
+            Color(0xFF1E1E20),
           ],
-          stops: [0.0, 0.5, 1.0],
+          stops: [0.0, 0.33, 0.67, 1.0],
         );
     }
   }
 }
 
 enum SunPhase { night, sunrise, day, sunset }
+

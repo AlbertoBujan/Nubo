@@ -139,21 +139,52 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: const AppDrawer(),
       body: Consumer<WeatherProvider>(
         builder: (context, provider, _) {
-          return AnimatedContainer(
-            duration: const Duration(seconds: 2),
-            curve: Curves.easeInOut,
-            decoration: BoxDecoration(
-              gradient: provider.backgroundGradient,
-            ),
-            child: SafeArea(
-              child: _buildBodyContent(context, provider),
-            ),
+          // AnimatedBuilder escucha la posición continua del PageController
+          return AnimatedBuilder(
+            animation: _pageController,
+            builder: (context, _) {
+              final gradient = _interpolatedGradient(provider);
+              return AnimatedContainer(
+                duration: const Duration(seconds: 2),
+                curve: Curves.easeInOut,
+                decoration: BoxDecoration(gradient: gradient),
+                child: SafeArea(
+                  child: _buildBodyContent(context, provider),
+                ),
+              );
+            },
           );
         },
       ),
-
     );
   }
+
+  /// Calcula el gradiente interpolado según la posición del PageController.
+  LinearGradient _interpolatedGradient(WeatherProvider provider) {
+    if (provider.savedLocations.length < 2 || !_pageController.hasClients) {
+      return provider.backgroundGradient;
+    }
+
+    final page = _pageController.page ?? provider.currentIndex.toDouble();
+    final currentPage = page.floor();
+    final nextPage = (currentPage + 1).clamp(0, provider.savedLocations.length - 1);
+    final t = page - currentPage; // Fracción entre 0.0 y 1.0
+
+    if (t == 0.0 || currentPage == nextPage) {
+      final id = provider.savedLocations[currentPage].municipioId;
+      return provider.gradientForMunicipio(id);
+    }
+
+    final gradA = provider.gradientForMunicipio(
+      provider.savedLocations[currentPage].municipioId,
+    );
+    final gradB = provider.gradientForMunicipio(
+      provider.savedLocations[nextPage].municipioId,
+    );
+
+    return WeatherProvider.lerpGradient(gradA, gradB, t);
+  }
+
 
   Widget _buildBodyContent(BuildContext context, WeatherProvider provider) {
     // Sincronizar PageController con el índice del provider
