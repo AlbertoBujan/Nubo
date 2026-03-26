@@ -165,9 +165,12 @@ class _HomeScreenState extends State<HomeScreen> {
       return provider.backgroundGradient;
     }
 
-    final page = _pageController.page ?? provider.currentIndex.toDouble();
-    final currentPage = page.floor();
-    final nextPage = (currentPage + 1).clamp(0, provider.savedLocations.length - 1);
+    final maxIndex = provider.savedLocations.length - 1;
+    final rawPage = _pageController.page ?? provider.currentIndex.toDouble();
+    // Clampear al rango válido para evitar RangeError tras eliminar ciudades
+    final page = rawPage.clamp(0.0, maxIndex.toDouble());
+    final currentPage = page.floor().clamp(0, maxIndex);
+    final nextPage = (currentPage + 1).clamp(0, maxIndex);
     final t = page - currentPage; // Fracción entre 0.0 y 1.0
 
     if (t == 0.0 || currentPage == nextPage) {
@@ -436,11 +439,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (confirmed == true && context.mounted) {
       final weatherProvider = context.read<WeatherProvider>();
-      await weatherProvider.removeLocation(index);
-      // Sincronizar PageController tras eliminar
+      // Calcular el índice destino ANTES de eliminar para sincronizar
+      // el PageController primero y evitar RangeError en _interpolatedGradient
+      final targetIndex = index >= weatherProvider.savedLocations.length - 1
+          ? (weatherProvider.savedLocations.length - 2).clamp(0, weatherProvider.savedLocations.length - 1)
+          : index;
       if (_pageController.hasClients) {
-        _pageController.jumpToPage(weatherProvider.currentIndex);
+        _pageController.jumpToPage(targetIndex);
       }
+      await weatherProvider.removeLocation(index);
     }
   }
 }
