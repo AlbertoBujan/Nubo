@@ -221,10 +221,6 @@ class _DrawerHeader extends StatelessWidget {
                   ),
                 ],
               ),
-              const Text(
-                'Meteorología AEMET',
-                style: TextStyle(color: Colors.white38, fontSize: 12),
-              ),
             ],
           ),
           IconButton(

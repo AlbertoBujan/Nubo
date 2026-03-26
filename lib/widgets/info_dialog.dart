@@ -43,7 +43,24 @@ class InfoDialog extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Todos los datos climatológicos mostrados en esta aplicación son proporcionados y elaborados por la Agencia Estatal de Meteorología (AEMET).',
+            'Los datos de predicción meteorológica (temperaturas, estado del cielo, etc.) son proporcionados por Open-Meteo.',
+            style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+          ),
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: () => _launchUrl('https://open-meteo.com/'),
+            child: const Text(
+              'Open-Meteo',
+              style: TextStyle(
+                color: Colors.blueAccent,
+                fontSize: 14,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Los avisos y alertas meteorológicas son proporcionados por la Agencia Estatal de Meteorología (AEMET).',
             style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
           ),
           const SizedBox(height: 8),
