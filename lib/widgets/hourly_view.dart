@@ -61,7 +61,7 @@ class HourlyView extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 155, // Aumentado para dar espacio al nuevo dato del viento
+          height: 165, // Aumentado para asegurar que no haya RenderFlex overflow en pantallas con escalado de fuente
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -191,13 +191,33 @@ class _HourlyCard extends StatelessWidget {
               fontWeight: isNow ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
-          const SizedBox(height: 8),
-          Icon(
-            weather.icon,
-            color: Colors.white70,
-            size: 28,
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 48, // Ampliado temporalmente para evitar que el texto + icono no quepan.
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  weather.icon,
+                  color: Colors.white70,
+                  size: 28,
+                ),
+                if (forecast.precipitationProbability != null && forecast.precipitationProbability! > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '${forecast.precipitationProbability}%',
+                      style: TextStyle(
+                        color: Colors.lightBlue.shade300,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             forecast.temperature != null ? '${forecast.temperature}°' : '--',
             style: const TextStyle(
