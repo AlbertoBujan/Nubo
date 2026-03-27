@@ -120,6 +120,19 @@ class _HourlyCard extends StatelessWidget {
     return Icons.warning;
   }
 
+  /// Devuelve el color de alerta AEMET en base al viento sostenido (km/h)
+  Color _getWindColor(int? speed) {
+    if (speed == null) return Colors.white54;
+    // Rojo: riesgo extremo (>90 km/h sostenidos es huracán)
+    if (speed >= 90) return Colors.redAccent.shade200;
+    // Naranja: riesgo importante
+    if (speed >= 75) return Colors.orange.shade400;
+    // Amarillo: riesgo bajo/actividades concretas
+    if (speed >= 50) return Colors.yellow.shade400;
+    
+    return Colors.white54;
+  }
+
   /// Calcula el nombre del día en formato corto (Hoy, Mañana, Mié, Jue, ...)
   String _getDayLabel() {
     final now = DateTime.now();
@@ -233,14 +246,14 @@ class _HourlyCard extends StatelessWidget {
               children: [
                 WindCompassArrow(
                   windDirectionDegrees: forecast.windDirectionDegrees ?? 0,
-                  color: Colors.white54,
+                  color: _getWindColor(forecast.windSpeed),
                   size: 12,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   '${forecast.windSpeed} km/h',
-                  style: const TextStyle(
-                    color: Colors.white54,
+                  style: TextStyle(
+                    color: _getWindColor(forecast.windSpeed),
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
                   ),
