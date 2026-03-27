@@ -12,6 +12,7 @@ class HourlyForecast {
   final int? humidity;
   final int? windSpeed;
   final String? windDirection;
+  final int? windDirectionDegrees;
 
   HourlyForecast({
     required this.dateTime,
@@ -22,6 +23,7 @@ class HourlyForecast {
     this.humidity,
     this.windSpeed,
     this.windDirection,
+    this.windDirectionDegrees,
   });
 
   /// Parsea la respuesta columbar (arrays paralelos) de Open Meteo
@@ -57,7 +59,9 @@ class HourlyForecast {
         final skyCodeOb = WeatherCode.fromCode(codeVal);
         
         String? windDirStr;
+        int? windDegrees;
         if (windDirection.length > i && windDirection[i] != null) {
+             windDegrees = (windDirection[i] as num).toInt();
              windDirStr = _degreesToCompass(windDirection[i] as num);
         }
 
@@ -70,6 +74,7 @@ class HourlyForecast {
           humidity: humidity.length > i ? (humidity[i] as num?)?.round() : null,
           windSpeed: windSpeed.length > i ? (windSpeed[i] as num?)?.round() : null,
           windDirection: windDirStr,
+          windDirectionDegrees: windDegrees,
         ));
     }
     

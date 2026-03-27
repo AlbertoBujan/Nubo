@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/hourly_forecast.dart';
 import '../models/weather_enums.dart';
 import '../models/weather_alert.dart';
+import 'dart:math' as math;
 
 /// Vista horizontal de predicción por horas.
 ///
@@ -60,7 +61,7 @@ class HourlyView extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 135, // Recortado agresivamente desde 175 para compactar la lista horizontal
+          height: 155, // Aumentado para dar espacio al nuevo dato del viento
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -157,7 +158,7 @@ class _HourlyCard extends StatelessWidget {
         ),
         // Tarjeta de la hora
         Container(
-          width: 80,
+          width: 86,
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -205,6 +206,27 @@ class _HourlyCard extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
+          const SizedBox(height: 4),
+          if (forecast.windSpeed != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Transform.rotate(
+                  // El viento se mide de donde viene, por lo que sumamos 180 para apuntar a donde va
+                  angle: ((forecast.windDirectionDegrees ?? 0) + 180) * (math.pi / 180),
+                  child: const Icon(LucideIcons.navigation, color: Colors.white54, size: 12),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${forecast.windSpeed} km/h',
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: 6),
           SizedBox(
             height: 14,
