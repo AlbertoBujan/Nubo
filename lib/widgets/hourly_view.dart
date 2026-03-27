@@ -4,7 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/hourly_forecast.dart';
 import '../models/weather_enums.dart';
 import '../models/weather_alert.dart';
-import 'dart:math' as math;
+import 'wind_compass_arrow.dart';
 
 /// Vista horizontal de predicción por horas.
 ///
@@ -231,10 +231,10 @@ class _HourlyCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Transform.rotate(
-                  // El viento se mide de donde viene, por lo que sumamos 180 para apuntar a donde va
-                  angle: ((forecast.windDirectionDegrees ?? 0) + 180) * (math.pi / 180),
-                  child: const Icon(LucideIcons.navigation, color: Colors.white54, size: 12),
+                WindCompassArrow(
+                  windDirectionDegrees: forecast.windDirectionDegrees ?? 0,
+                  color: Colors.white54,
+                  size: 12,
                 ),
                 const SizedBox(width: 4),
                 Text(
