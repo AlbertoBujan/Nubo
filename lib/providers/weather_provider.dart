@@ -10,6 +10,7 @@ import '../services/api_service.dart';
 import '../services/location_service.dart';
 import '../services/municipio_search_service.dart';
 import '../utils/sun_calculator.dart';
+import '../utils/moon_calculator.dart';
 import '../models/weather_enums.dart';
 import 'dart:async';
 
@@ -57,6 +58,7 @@ class WeatherProvider extends ChangeNotifier {
   // --- Fondo dinámico e iluminación ---
   SunPhase _currentPhase = SunPhase.night;
   final Map<String, SunTimes> _sunTimesCache = {};
+  final Map<String, MoonData> _moonDataCache = {};
   Timer? _bgTimer;
 
   // --- Estado de refresco global (pull-to-refresh) ---
@@ -66,6 +68,7 @@ class WeatherProvider extends ChangeNotifier {
   List<SavedLocation> get savedLocations => _savedLocations;
   SunPhase get currentPhase => _currentPhase;
   SunTimes? get currentSunTimes => _sunTimesCache[currentMunicipioId];
+  MoonData? get currentMoonData => _moonDataCache[currentMunicipioId];
   int get currentIndex => _currentIndex;
   bool get isLocating => _isLocating;
   List<SavedLocation> get searchResults => _searchResults;
@@ -647,10 +650,12 @@ class WeatherProvider extends ChangeNotifier {
 
     final now = DateTime.now().millisecondsSinceEpoch;
     final sunTimes = SunCalculator.calculateTimes(DateTime.now(), lat, lon);
+    final moonData = MoonCalculator.calculate(DateTime.now(), lat, lon);
     
     // Almacenar en la caché local para acceso síncrono
     if (id.isNotEmpty) {
       _sunTimesCache[id] = sunTimes;
+      _moonDataCache[id] = moonData;
     }
     
     // Calcular offsets para transiciones (30 minutos)

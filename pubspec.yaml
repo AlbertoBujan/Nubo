@@ -1,7 +1,7 @@
 name: nubo
 description: "App meteorológica Flutter - AEMET"
 publish_to: 'none'
-version: 0.1.25
+version: 0.1.26
 
 environment:
   sdk: ^3.10.8
@@ -25,6 +25,7 @@ dependencies:
   dio: ^5.9.1
   open_filex: ^4.7.0
   flutter_compass: ^0.8.1
+  apsl_sun_calc: ^0.0.4
 
 dev_dependencies:
   flutter_test:

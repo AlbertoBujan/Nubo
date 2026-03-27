@@ -5,7 +5,7 @@ import '../providers/weather_provider.dart';
 import '../widgets/alert_box.dart';
 import '../widgets/hourly_view.dart';
 import '../widgets/daily_view.dart';
-import '../widgets/sun_card.dart';
+import '../widgets/sun_moon_card.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/search_location_sheet.dart';
 import '../services/update_service.dart';
@@ -673,8 +673,8 @@ class _WeatherPageState extends State<_WeatherPage> {
 
             const SizedBox(height: 8),
 
-            // --- Caja 3: Ciclo solar ---
-            SunCard(provider: provider),
+            // --- Caja 3: Ciclo solar y lunar ---
+            SunMoonCard(provider: provider),
 
             const SizedBox(height: 20),
           ],
