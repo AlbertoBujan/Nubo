@@ -24,8 +24,7 @@ class SunMoonCard extends StatelessWidget {
           Expanded(
             child: _ArcCard(
               title: 'Sol',
-              titleIcon: LucideIcons.sun,
-              titleIconColor: Colors.amber,
+              titleIcon: const Icon(LucideIcons.sun, color: Colors.amber, size: 16),
               startTime: sunTimes.sunrise,
               endTime: sunTimes.sunset,
               startLabel: DateFormat('HH:mm').format(sunTimes.sunrise),
@@ -43,9 +42,14 @@ class SunMoonCard extends StatelessWidget {
           // --- Tarjeta Luna ---
           Expanded(
             child: _ArcCard(
-              title: 'Luna',
-              titleIcon: LucideIcons.moonStar,
-              titleIconColor: Colors.blueGrey.shade200,
+              title: moonData?.phaseName ?? 'Luna',
+              titleIcon: CustomPaint(
+                size: const Size(16, 16),
+                painter: _MoonPhasePainter(
+                  phase: moonData?.phase ?? 0.0,
+                  color: Colors.blueGrey.shade200,
+                ),
+              ),
               startTime: moonData?.moonrise,
               endTime: moonData?.moonset,
               startLabel: moonData?.moonrise != null
@@ -56,12 +60,10 @@ class SunMoonCard extends StatelessWidget {
                   : '--:--',
               arcColor: Colors.blueGrey.shade300,
               arcTrailColor: Colors.blueGrey.shade500.withValues(alpha: 0.3),
-              iconBuilder: (size) => CustomPaint(
-                size: Size(size, size),
-                painter: _MoonPhasePainter(
-                  phase: moonData?.phase ?? 0.0,
-                  color: Colors.blueGrey.shade200,
-                ),
+              iconBuilder: (size) => Icon(
+                LucideIcons.moon,
+                color: Colors.blueGrey.shade200,
+                size: size,
               ),
             ),
           ),
@@ -74,8 +76,7 @@ class SunMoonCard extends StatelessWidget {
 /// Tarjeta individual con arco, icono animado y horas.
 class _ArcCard extends StatelessWidget {
   final String title;
-  final IconData titleIcon;
-  final Color titleIconColor;
+  final Widget titleIcon;
   final DateTime? startTime;
   final DateTime? endTime;
   final String startLabel;
@@ -87,7 +88,6 @@ class _ArcCard extends StatelessWidget {
   const _ArcCard({
     required this.title,
     required this.titleIcon,
-    required this.titleIconColor,
     required this.startTime,
     required this.endTime,
     required this.startLabel,
@@ -144,7 +144,7 @@ class _ArcCard extends StatelessWidget {
           // Título
           Row(
             children: [
-              Icon(titleIcon, color: titleIconColor, size: 16),
+              titleIcon,
               const SizedBox(width: 5),
               Text(
                 title,
@@ -285,7 +285,14 @@ class _ArcPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
 
-      _drawSolidArc(canvas, centerX, baseY, radiusX, radiusY, 0.0, progress, activePaint);
+      // Calcular margen para que la línea se detenga un poco antes del centro del icono
+      final approxArcLength = math.pi * ((radiusX + radiusY) / 2);
+      final gapProgress = 10.0 / approxArcLength; // Espacio para el icono (aprox 14 px)
+      final drawProgress = math.max(0.0, progress - gapProgress);
+
+      if (drawProgress > 0.0) {
+        _drawSolidArc(canvas, centerX, baseY, radiusX, radiusY, 0.0, drawProgress, activePaint);
+      }
     }
   }
 
