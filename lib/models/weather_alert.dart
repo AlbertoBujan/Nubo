@@ -111,6 +111,20 @@ class WeatherAlert {
   String get nivelDisplay =>
       nivel.isNotEmpty ? nivel[0].toUpperCase() + nivel.substring(1) : nivel;
 
+  /// Severidad de la alerta (mayor es más grave).
+  int get severity {
+    switch (nivel.toLowerCase()) {
+      case 'rojo':
+        return 3;
+      case 'naranja':
+        return 2;
+      case 'amarillo':
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
   /// Devuelve true si la alerta es vigente o próxima.
   bool get isActiveOrUpcoming {
     final now = DateTime.now();

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -7,9 +9,9 @@ import '../models/weather_alert.dart';
 import 'wind_compass_arrow.dart';
 
 /// Vista horizontal de predicción por horas.
-///
-/// Muestra una lista horizontal con tarjetas de cristal (glassmorphism)
-/// para cada hora, con icono, temperatura y hora.
+/// Muestra un único contenedor con scroll horizontal continuo,
+/// donde la información meteorológica se alinea en la parte superior y 
+/// las temperaturas forman un gráfico de línea continuo inferior.
 class HourlyView extends StatelessWidget {
   final List<HourlyForecast> forecasts;
   final List<WeatherAlert> alerts;
@@ -31,7 +33,7 @@ class HourlyView extends StatelessWidget {
       );
     }
 
-    // Filtramos para mostrar solo las horas futuras o del día actual
+    // Filtramos para mostrar solo horas futuras o del día actual
     final now = DateTime.now();
     final filteredForecasts = forecasts
         .where((f) => f.dateTime.isAfter(now.subtract(const Duration(hours: 1))))
@@ -40,72 +42,126 @@ class HourlyView extends StatelessWidget {
     final displayForecasts =
         filteredForecasts.isEmpty ? forecasts : filteredForecasts;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
-          child: Row(
-            children: [
-              Icon(LucideIcons.clock, color: Colors.white70, size: 18),
-              SizedBox(width: 6),
-              Text(
-                'Predicción por horas',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+    final bool hasAnyRain = displayForecasts.any((f) => (f.precipitationProbability ?? 0) > 0);
+
+    final itemWidth = 65.0;
+    final paddingLeft = 32.0;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.1),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Título
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(LucideIcons.clock, color: Colors.white70, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  'Predicción por horas',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        SizedBox(
-          height: 165, // Aumentado para asegurar que no haya RenderFlex overflow en pantallas con escalado de fuente
-          child: ListView.builder(
+          const SizedBox(height: 20),
+          // Contenido desplazable horizontalmente
+          SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: displayForecasts.length,
-            itemBuilder: (context, index) {
-              return _HourlyCard(
-                forecast: displayForecasts[index],
-                alerts: alerts,
-              );
-            },
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Fila superior de información (Hora, icono, precipitación, viento, alertas)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: paddingLeft), // Espacio para el eje Y (máx/mín)
+                    ...List.generate(displayForecasts.length, (index) {
+                      final showDay = index == 0 || displayForecasts[index].dateTime.hour == 0;
+                      return SizedBox(
+                        width: itemWidth,
+                        child: _HourlyInfoColumn(
+                          forecast: displayForecasts[index],
+                          alerts: alerts,
+                          showDay: showDay,
+                          hasAnyRain: hasAnyRain,
+                        ),
+                      );
+                    }),
+                    const SizedBox(width: 16), // Padding final
+                  ],
+                ),
+                // Gráfico continuo inferior
+                CustomPaint(
+                  size: Size(paddingLeft + (itemWidth * displayForecasts.length) + 16, 85),
+                  painter: _HourlyChartPainter(
+                    forecasts: displayForecasts,
+                    itemWidth: itemWidth,
+                    paddingLeft: paddingLeft,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _HourlyCard extends StatelessWidget {
+class _HourlyInfoColumn extends StatelessWidget {
   final HourlyForecast forecast;
   final List<WeatherAlert> alerts;
+  final bool showDay;
+  final bool hasAnyRain;
 
-  const _HourlyCard({
+  const _HourlyInfoColumn({
     required this.forecast,
     required this.alerts,
+    required this.showDay,
+    required this.hasAnyRain,
   });
 
-  /// Busca alertas vigentes durante esta hora.
   List<WeatherAlert> _getActiveAlertsForHour() {
     final startOfHour = forecast.dateTime;
     final endOfHour = startOfHour.add(const Duration(hours: 1));
     
-    return alerts.where((alert) {
+    final activeAlerts = alerts.where((alert) {
       if (alert.onset == null && alert.expires == null) return false;
       final onset = alert.onset ?? alert.expires!.subtract(const Duration(days: 1));
       final expires = alert.expires ?? alert.onset!.add(const Duration(days: 1));
-      
-      // Para que un aviso sea válido en esta hora, debe comenzar antes de que termine la hora
-      // y terminar después de que haya empezado la hora. Así evitamos que apunte a las 07:00
-      // un aviso que justo empieza a las 08:00.
       return onset.isBefore(endOfHour) && expires.isAfter(startOfHour);
-    }).toList();
+    });
+
+    final deduplicatedAlerts = <IconData, WeatherAlert>{};
+    for (final alert in activeAlerts) {
+      final icon = _getIconForEvent(alert.event);
+      if (!deduplicatedAlerts.containsKey(icon) || alert.severity > deduplicatedAlerts[icon]!.severity) {
+        deduplicatedAlerts[icon] = alert;
+      }
+    }
+    
+    final result = deduplicatedAlerts.values.toList();
+    result.sort((a, b) => b.severity.compareTo(a.severity));
+    return result;
   }
 
-  /// Devuelve el icono apropiado según el texto descriptivo del evento
   IconData _getIconForEvent(String event) {
     final text = event.toLowerCase();
     if (text.contains('viento')) return LucideIcons.wind;
@@ -120,20 +176,14 @@ class _HourlyCard extends StatelessWidget {
     return Icons.warning;
   }
 
-  /// Devuelve el color de alerta AEMET en base al viento sostenido (km/h)
   Color _getWindColor(int? speed) {
-    if (speed == null) return Colors.white54;
-    // Rojo: riesgo extremo (>90 km/h sostenidos es huracán)
-    if (speed >= 90) return Colors.redAccent.shade200;
-    // Naranja: riesgo importante
-    if (speed >= 75) return Colors.orange.shade400;
-    // Amarillo: riesgo bajo/actividades concretas
-    if (speed >= 50) return Colors.yellow.shade400;
-    
-    return Colors.white54;
+    if (speed == null) return Colors.white70;
+    if (speed >= 80) return Colors.redAccent.shade200;
+    if (speed >= 65) return Colors.orange.shade400;
+    if (speed >= 45) return Colors.yellow.shade400;
+    return Colors.white70;
   }
 
-  /// Calcula el nombre del día en formato corto (Hoy, Mañana, Mié, Jue, ...)
   String _getDayLabel() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -142,7 +192,7 @@ class _HourlyCard extends StatelessWidget {
     if (forecastDate == today) return 'Hoy';
     if (forecastDate == today.add(const Duration(days: 1))) return 'Mañana';
     
-    final dayName = DateFormat('EEEE', 'es_ES').format(forecast.dateTime);
+    final dayName = DateFormat('EEE', 'es_ES').format(forecast.dateTime);
     return dayName[0].toUpperCase() + dayName.substring(1);
   }
 
@@ -152,51 +202,22 @@ class _HourlyCard extends StatelessWidget {
     final timeStr = DateFormat('HH:mm').format(forecast.dateTime);
     final isNow = DateTime.now().hour == forecast.dateTime.hour &&
         DateTime.now().day == forecast.dateTime.day;
-        
     final activeAlerts = _getActiveAlertsForHour();
+    final rain = forecast.precipitationProbability ?? 0;
 
     return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        // Etiqueta superior del día
-        Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Text(
+        SizedBox(
+          height: 14,
+          child: showDay ? Text(
             _getDayLabel(),
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+            style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+          ) : null,
         ),
-        // Tarjeta de la hora
-        Container(
-          width: 86,
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: isNow
-            ? LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.blue.shade400.withValues(alpha: 0.6),
-                  Colors.blue.shade700.withValues(alpha: 0.4),
-                ],
-              )
-            : null,
-        color: isNow ? null : Colors.white.withValues(alpha: 0.08),
-        border: Border.all(
-          color: isNow
-              ? Colors.blue.shade300.withValues(alpha: 0.5)
-              : Colors.white.withValues(alpha: 0.1),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
+        SizedBox(
+          height: 18,
+          child: Text(
             isNow ? 'Ahora' : timeStr,
             style: TextStyle(
               color: isNow ? Colors.white : Colors.white70,
@@ -204,90 +225,211 @@ class _HourlyCard extends StatelessWidget {
               fontWeight: isNow ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
-          const SizedBox(height: 4),
-          SizedBox(
-            height: 48, // Ampliado temporalmente para evitar que el texto + icono no quepan.
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  weather.icon,
-                  color: Colors.white70,
-                  size: 28,
-                ),
-                if (forecast.precipitationProbability != null && forecast.precipitationProbability! > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      '${forecast.precipitationProbability}%',
-                      style: TextStyle(
-                        color: Colors.lightBlue.shade300,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 36,
+          child: Center(
+            child: Icon(weather.icon, color: Colors.white, size: 28),
           ),
-          const SizedBox(height: 4),
-          Text(
-            forecast.temperature != null ? '${forecast.temperature}°' : '--',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          if (forecast.windSpeed != null)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                WindCompassArrow(
-                  windDirectionDegrees: forecast.windDirectionDegrees ?? 0,
-                  color: _getWindColor(forecast.windSpeed),
-                  size: 12,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${forecast.windSpeed} km/h',
-                  style: TextStyle(
-                    color: _getWindColor(forecast.windSpeed),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          const SizedBox(height: 6),
+        ),
+        if (hasAnyRain)
           SizedBox(
             height: 14,
-            child: activeAlerts.isNotEmpty
-                ? Wrap(
-                    spacing: 4,
-                    alignment: WrapAlignment.center,
-                    children: () {
-                      final uniqueIcons = <IconData, Color>{};
-                      for (final alert in activeAlerts) {
-                        final icon = _getIconForEvent(alert.event);
-                        uniqueIcons.putIfAbsent(icon, () => alert.color);
-                      }
-                      return uniqueIcons.entries.map((entry) {
-                        return Icon(
-                          entry.key,
-                          color: entry.value,
-                          size: 14,
-                        );
-                      }).toList();
-                    }(),
-                  )
-                : null,
+            child: rain > 0 ? Text(
+              '$rain%',
+              style: TextStyle(
+                color: Colors.lightBlue.shade300,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ) : null,
           ),
-        ],
-      ),
-    ),
+        if (hasAnyRain)
+          const SizedBox(height: 4),
+        SizedBox(
+          height: 20,
+          child: forecast.windSpeed != null ? Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              WindCompassArrow(
+                windDirectionDegrees: forecast.windDirectionDegrees ?? 0,
+                color: _getWindColor(forecast.windSpeed),
+                size: 10,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${forecast.windSpeed} km/h',
+                style: TextStyle(
+                  color: _getWindColor(forecast.windSpeed),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ) : null,
+        ),
+        SizedBox(
+          height: 16,
+          child: activeAlerts.isNotEmpty ? Wrap(
+            spacing: 2,
+            alignment: WrapAlignment.center,
+            children: activeAlerts.map((alert) {
+              return Icon(
+                _getIconForEvent(alert.event),
+                color: alert.color,
+                size: 14,
+              );
+            }).toList(),
+          ) : null,
+        ),
       ],
     );
   }
+}
+
+class _HourlyChartPainter extends CustomPainter {
+  final List<HourlyForecast> forecasts;
+  final double itemWidth;
+  final double paddingLeft;
+
+  _HourlyChartPainter({
+    required this.forecasts,
+    required this.itemWidth,
+    required this.paddingLeft,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (forecasts.isEmpty) return;
+
+    double maxT = double.negativeInfinity;
+    double minT = double.infinity;
+    for (var f in forecasts) {
+      if (f.temperature != null) {
+        if (f.temperature! > maxT) maxT = f.temperature!.toDouble();
+        if (f.temperature! < minT) minT = f.temperature!.toDouble();
+      }
+    }
+
+    if (maxT == double.negativeInfinity) return;
+    if (maxT == minT) {
+      maxT += 1;
+      minT -= 1;
+    }
+
+    final double paddingTop = 10.0;
+    final double paddingBottom = 25.0; // Espacio para el texto de temperatura debajo 
+    final double chartH = size.height - paddingTop - paddingBottom;
+
+    // Dibujar textos de leyenda (max y min) desplazables unidos al gráfico
+    final textStyle = const TextStyle(color: Colors.white54, fontSize: 10);
+    
+    final maxPainter = TextPainter(
+      text: TextSpan(text: '${maxT.round()}°', style: textStyle),
+      textDirection: ui.TextDirection.ltr,
+    );
+    maxPainter.layout();
+    maxPainter.paint(canvas, Offset(8, paddingTop - maxPainter.height / 2));
+
+    final minPainter = TextPainter(
+      text: TextSpan(text: '${minT.round()}°', style: textStyle),
+      textDirection: ui.TextDirection.ltr,
+    );
+    minPainter.layout();
+    minPainter.paint(canvas, Offset(8, size.height - paddingBottom - minPainter.height / 2));
+
+    // Dibujar líneas guía horizontales sutiles desde la izq.
+    final guidePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.1)
+      ..strokeWidth = 1;
+    canvas.drawLine(Offset(paddingLeft, paddingTop), Offset(size.width, paddingTop), guidePaint);
+    canvas.drawLine(Offset(paddingLeft, size.height - paddingBottom), Offset(size.width, size.height - paddingBottom), guidePaint);
+
+    // Calcular puntos
+    List<Offset> points = [];
+    for (int i = 0; i < forecasts.length; i++) {
+      final t = forecasts[i].temperature?.toDouble() ?? minT;
+      final x = paddingLeft + (i + 0.5) * itemWidth;
+      final y = paddingTop + chartH * (1.0 - (t - minT) / (maxT - minT));
+      points.add(Offset(x, y));
+      
+      // Líneas verticales por cada hora
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        Paint()..color = Colors.white.withValues(alpha: 0.03)..strokeWidth = 1,
+      );
+    }
+
+    // Trazar línea de temperaturas usando curvas cuadráticas
+    final path = Path();
+    path.moveTo(points[0].dx, points[0].dy);
+    for (int i = 0; i < points.length - 1; i++) {
+        final p0 = points[i];
+        final p1 = points[i + 1];
+        final midX = (p0.dx + p1.dx) / 2;
+        path.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
+    }
+
+    // Dibujar borde de la línea
+    final strokePaint = Paint()
+      ..color = Colors.cyan.shade300
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(path, strokePaint);
+
+    // Pintar gradiente por debajo de la curva
+    final fillPath = Path.from(path);
+    fillPath.lineTo(points.last.dx, size.height);
+    fillPath.lineTo(points.first.dx, size.height);
+    fillPath.close();
+
+    final fillPaint = Paint()
+      ..shader = ui.Gradient.linear(
+        Offset(0, paddingTop),
+        Offset(0, size.height),
+        [
+          Colors.cyan.shade300.withValues(alpha: 0.35),
+          Colors.cyan.shade300.withValues(alpha: 0.0),
+        ],
+      )
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(fillPath, fillPaint);
+
+    // Dibujar las temperaturas debajo de la línea
+    for (int i = 0; i < points.length; i++) {
+      final t = forecasts[i].temperature;
+      if (t == null) continue;
+
+      final tempPainter = TextPainter(
+        text: TextSpan(
+          text: '$t°', 
+          style: const TextStyle(
+            color: Colors.white, 
+            fontSize: 14, 
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: ui.TextDirection.ltr,
+      );
+      tempPainter.layout();
+      
+      // Colocar debajo del punto
+      tempPainter.paint(
+        canvas, 
+        Offset(points[i].dx - tempPainter.width / 2, points[i].dy + 8),
+      );
+      
+      // Dibujar también un circulito brillante en el punto
+      canvas.drawCircle(
+        points[i], 
+        2.5, 
+        Paint()..color = Colors.white,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HourlyChartPainter oldDelegate) => true;
 }
