@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/daily_forecast.dart';
+import '../models/hourly_forecast.dart';
+import '../models/weather_alert.dart';
 import '../models/weather_enums.dart';
 import '../providers/weather_provider.dart';
+import '../utils/sun_calculator.dart';
+import '../utils/moon_calculator.dart';
 import '../widgets/alert_box.dart';
 import '../widgets/hourly_view.dart';
 import '../widgets/daily_view.dart';
@@ -475,23 +480,35 @@ class _WeatherPage extends StatefulWidget {
 class _WeatherPageState extends State<_WeatherPage> {
   @override
   Widget build(BuildContext context) {
-    return Consumer<WeatherProvider>(
-      builder: (context, provider, _) {
-        final isLoading = provider.isLoadingFor(widget.municipioId);
-        final errorMessage = provider.errorMessageFor(widget.municipioId);
-        final daily = provider.dailyForecastsFor(widget.municipioId);
-        final hourly = provider.hourlyForecastsFor(widget.municipioId);
-        final cityName = provider.cityNameFor(widget.municipioId);
+    // Selector extrae solo los datos de ESTE municipio. Solo rebuild si cambian.
+    return Selector<WeatherProvider, _WeatherPageData>(
+      selector: (_, provider) => _WeatherPageData(
+        isLoading: provider.isLoadingFor(widget.municipioId),
+        errorMessage: provider.errorMessageFor(widget.municipioId),
+        daily: provider.dailyForecastsFor(widget.municipioId),
+        hourly: provider.hourlyForecastsFor(widget.municipioId),
+        cityName: provider.cityNameFor(widget.municipioId),
+        alerts: provider.alertsFor(widget.municipioId),
+        currentTemp: provider.currentTemperatureFor(widget.municipioId),
+        skyCode: provider.currentSkyCodeFor(widget.municipioId),
+        skyDesc: provider.currentSkyDescriptionFor(widget.municipioId),
+        tempRange: provider.todayTempRangeFor(widget.municipioId),
+        sunTimes: provider.currentSunTimes,
+        moonData: provider.currentMoonData,
+      ),
+      shouldRebuild: (prev, next) => prev != next,
+      builder: (context, data, _) {
+        final provider = context.read<WeatherProvider>();
 
         Widget content;
-        if (isLoading) {
-          content = _buildLoadingState(cityName);
-        } else if (errorMessage != null) {
+        if (data.isLoading) {
+          content = _buildLoadingState(data.cityName);
+        } else if (data.errorMessage != null) {
           content = _buildErrorState(provider);
-        } else if (daily.isEmpty || hourly.isEmpty) {
-          content = _buildNoDataState(provider, cityName);
+        } else if (data.daily.isEmpty || data.hourly.isEmpty) {
+          content = _buildNoDataState(provider, data.cityName);
         } else {
-          content = _buildContent(provider, cityName);
+          content = _buildContent(provider, data);
         }
 
         return content;
@@ -594,15 +611,8 @@ class _WeatherPageState extends State<_WeatherPage> {
     );
   }
 
-  Widget _buildContent(WeatherProvider provider, String cityName) {
-    final tempRange = provider.todayTempRangeFor(widget.municipioId);
-    final skyCode = provider.currentSkyCodeFor(widget.municipioId);
-    final weather = WeatherCode.fromCode(skyCode);
-    final currentTemp = provider.currentTemperatureFor(widget.municipioId);
-    final skyDesc = provider.currentSkyDescriptionFor(widget.municipioId);
-    final alerts = provider.alertsFor(widget.municipioId);
-    final hourlyForecasts = provider.hourlyForecastsFor(widget.municipioId);
-    final dailyForecasts = provider.dailyForecastsFor(widget.municipioId);
+  Widget _buildContent(WeatherProvider provider, _WeatherPageData data) {
+    final weather = WeatherCode.fromCode(data.skyCode);
 
     return RefreshIndicator(
       onRefresh: () => provider.refreshAllWeather(),
@@ -621,7 +631,7 @@ class _WeatherPageState extends State<_WeatherPage> {
                   const Icon(Icons.location_on, color: Colors.white54, size: 16),
                   const SizedBox(width: 4),
                   Text(
-                    cityName,
+                    data.cityName,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -638,7 +648,7 @@ class _WeatherPageState extends State<_WeatherPage> {
               child: Column(
                 children: [
                   Text(
-                    currentTemp != null ? '$currentTemp°' : '--°',
+                    data.currentTemp != null ? '${data.currentTemp}°' : '--°',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 72,
@@ -648,12 +658,12 @@ class _WeatherPageState extends State<_WeatherPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    skyDesc.isNotEmpty ? skyDesc : weather.description,
+                    data.skyDesc.isNotEmpty ? data.skyDesc : weather.description,
                     style: const TextStyle(color: Colors.white70, fontSize: 18),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Máx: ${tempRange.$1 ?? '--'}°  Mín: ${tempRange.$2 ?? '--'}°',
+                    'Máx: ${data.tempRange.$1 ?? '--'}°  Mín: ${data.tempRange.$2 ?? '--'}°',
                     style: const TextStyle(color: Colors.white54, fontSize: 15),
                   ),
                 ],
@@ -661,20 +671,26 @@ class _WeatherPageState extends State<_WeatherPage> {
             ),
 
             // --- Alertas meteorológicas (si las hay) ---
-            AlertBox(alerts: alerts),
+            AlertBox(alerts: data.alerts),
 
             // --- Caja 1: Pronóstico por horas ---
-            HourlyView(forecasts: hourlyForecasts, alerts: alerts),
+            RepaintBoundary(
+              child: HourlyView(forecasts: data.hourly, alerts: data.alerts),
+            ),
 
             const SizedBox(height: 8),
 
-            // --- Caja 2: Pronóstico por días (scroll horizontal interno) ---
-            DailyView(forecasts: dailyForecasts, alerts: alerts),
+            // --- Caja 2: Pronóstico por días ---
+            RepaintBoundary(
+              child: DailyView(forecasts: data.daily, alerts: data.alerts),
+            ),
 
             const SizedBox(height: 8),
 
             // --- Caja 3: Ciclo solar y lunar ---
-            SunMoonCard(provider: provider),
+            RepaintBoundary(
+              child: SunMoonCard(provider: provider),
+            ),
 
             const SizedBox(height: 20),
           ],
@@ -682,6 +698,64 @@ class _WeatherPageState extends State<_WeatherPage> {
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Datos extraídos para el Selector (evita rebuilds innecesarios)
+// ---------------------------------------------------------------------------
+
+class _WeatherPageData {
+  final bool isLoading;
+  final String? errorMessage;
+  final List<DailyForecast> daily;
+  final List<HourlyForecast> hourly;
+  final String cityName;
+  final List<WeatherAlert> alerts;
+  final int? currentTemp;
+  final String skyCode;
+  final String skyDesc;
+  final (int?, int?) tempRange;
+  final SunTimes? sunTimes;
+  final MoonData? moonData;
+
+  const _WeatherPageData({
+    required this.isLoading,
+    required this.errorMessage,
+    required this.daily,
+    required this.hourly,
+    required this.cityName,
+    required this.alerts,
+    required this.currentTemp,
+    required this.skyCode,
+    required this.skyDesc,
+    required this.tempRange,
+    required this.sunTimes,
+    required this.moonData,
+  });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! _WeatherPageData) return false;
+    return isLoading == other.isLoading &&
+        errorMessage == other.errorMessage &&
+        identical(daily, other.daily) &&
+        identical(hourly, other.hourly) &&
+        cityName == other.cityName &&
+        identical(alerts, other.alerts) &&
+        currentTemp == other.currentTemp &&
+        skyCode == other.skyCode &&
+        skyDesc == other.skyDesc &&
+        tempRange == other.tempRange &&
+        sunTimes == other.sunTimes &&
+        moonData == other.moonData;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    isLoading, errorMessage, cityName, currentTemp,
+    skyCode, skyDesc, tempRange,
+  );
 }
 
 // ---------------------------------------------------------------------------

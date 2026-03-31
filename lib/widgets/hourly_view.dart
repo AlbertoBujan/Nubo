@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -81,9 +80,10 @@ class HourlyView extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           // Contenido desplazable horizontalmente
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
+          RepaintBoundary(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -116,7 +116,8 @@ class HourlyView extends StatelessWidget {
                     paddingLeft: paddingLeft,
                   ),
                 ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -293,7 +294,7 @@ class _HourlyChartPainter extends CustomPainter {
   final double itemWidth;
   final double paddingLeft;
 
-  _HourlyChartPainter({
+  const _HourlyChartPainter({
     required this.forecasts,
     required this.itemWidth,
     required this.paddingLeft,
@@ -372,14 +373,30 @@ class _HourlyChartPainter extends CustomPainter {
         path.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
     }
 
-    // Dibujar borde de la línea
+    // Crear gradiente horizontal basado en la temperatura de cada punto
+    final tempColors = <Color>[];
+    final tempStops = <double>[];
+    for (int i = 0; i < points.length; i++) {
+      final t = forecasts[i].temperature?.toDouble() ?? minT;
+      tempColors.add(_colorForTemperature(t));
+      tempStops.add((points[i].dx - points.first.dx) / (points.last.dx - points.first.dx));
+    }
+
+    final tempGradient = ui.Gradient.linear(
+      Offset(points.first.dx, 0),
+      Offset(points.last.dx, 0),
+      tempColors,
+      tempStops,
+    );
+
+    // Dibujar borde de la línea con gradiente de temperatura
     final strokePaint = Paint()
-      ..color = Colors.cyan.shade300
+      ..shader = tempGradient
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke;
     canvas.drawPath(path, strokePaint);
 
-    // Pintar gradiente por debajo de la curva
+    // Pintar relleno sutil por debajo de la curva
     final fillPath = Path.from(path);
     fillPath.lineTo(points.last.dx, size.height);
     fillPath.lineTo(points.first.dx, size.height);
@@ -390,8 +407,8 @@ class _HourlyChartPainter extends CustomPainter {
         Offset(0, paddingTop),
         Offset(0, size.height),
         [
-          Colors.cyan.shade300.withValues(alpha: 0.35),
-          Colors.cyan.shade300.withValues(alpha: 0.0),
+          Colors.white.withValues(alpha: 0.15),
+          Colors.white.withValues(alpha: 0.0),
         ],
       )
       ..style = PaintingStyle.fill;
@@ -430,6 +447,40 @@ class _HourlyChartPainter extends CustomPainter {
     }
   }
 
+  /// Mapea una temperatura (°C) a un color con transición suave.
+  /// Rangos: ≤0° azul profundo → 10° cian → 18° verde → 25° amarillo → 32° naranja → ≥38° rojo
+  static Color _colorForTemperature(double temp) {
+    const stops = [
+      (temp: 0.0,  color: Color(0xFF2196F3)),  // Azul
+      (temp: 10.0, color: Color(0xFF00BCD4)),  // Cian
+      (temp: 18.0, color: Color(0xFF4CAF50)),  // Verde
+      (temp: 25.0, color: Color(0xFFFFEB3B)),  // Amarillo
+      (temp: 32.0, color: Color(0xFFFF9800)),  // Naranja
+      (temp: 38.0, color: Color(0xFFF44336)),  // Rojo
+    ];
+
+    if (temp <= stops.first.temp) return stops.first.color;
+    if (temp >= stops.last.temp) return stops.last.color;
+
+    for (int i = 0; i < stops.length - 1; i++) {
+      if (temp >= stops[i].temp && temp <= stops[i + 1].temp) {
+        final t = (temp - stops[i].temp) / (stops[i + 1].temp - stops[i].temp);
+        return Color.lerp(stops[i].color, stops[i + 1].color, t)!;
+      }
+    }
+    return stops.last.color;
+  }
+
   @override
-  bool shouldRepaint(covariant _HourlyChartPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _HourlyChartPainter oldDelegate) {
+    if (oldDelegate.itemWidth != itemWidth || oldDelegate.paddingLeft != paddingLeft) return true;
+    if (oldDelegate.forecasts.length != forecasts.length) return true;
+    // Comparación superficial: si las referencias son iguales, no repintar
+    if (identical(oldDelegate.forecasts, forecasts)) return false;
+    // Comparación por contenido
+    for (int i = 0; i < forecasts.length; i++) {
+      if (oldDelegate.forecasts[i].temperature != forecasts[i].temperature) return true;
+    }
+    return false;
+  }
 }
