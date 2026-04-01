@@ -11,7 +11,7 @@ import 'wind_compass_arrow.dart';
 /// Muestra un único contenedor con scroll horizontal continuo,
 /// donde la información meteorológica se alinea en la parte superior y 
 /// las temperaturas forman un gráfico de línea continuo inferior.
-class HourlyView extends StatelessWidget {
+class HourlyView extends StatefulWidget {
   final List<HourlyForecast> forecasts;
   final List<WeatherAlert> alerts;
 
@@ -22,8 +22,94 @@ class HourlyView extends StatelessWidget {
   });
 
   @override
+  State<HourlyView> createState() => _HourlyViewState();
+}
+
+class _HourlyViewState extends State<HourlyView> {
+  // Datos pre-computados que se calculan una sola vez cuando cambian los forecasts.
+  List<HourlyForecast> _displayForecasts = const [];
+  bool _hasAnyRain = false;
+  // Cache de la imagen del chart rasterizada para evitar re-paint costoso.
+  ui.Image? _chartImage;
+  double _chartWidth = 0;
+  final double _chartHeight = 85;
+
+  static const double _itemWidth = 65.0;
+  static const double _paddingLeft = 32.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _computeDisplayData();
+  }
+
+  @override
+  void didUpdateWidget(HourlyView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.forecasts, widget.forecasts) ||
+        !identical(oldWidget.alerts, widget.alerts)) {
+      _invalidateChartCache();
+      _computeDisplayData();
+    }
+  }
+
+  @override
+  void dispose() {
+    _chartImage?.dispose();
+    super.dispose();
+  }
+
+  void _invalidateChartCache() {
+    _chartImage?.dispose();
+    _chartImage = null;
+  }
+
+  void _computeDisplayData() {
+    final now = DateTime.now();
+    final filtered = widget.forecasts
+        .where((f) => f.dateTime.isAfter(now.subtract(const Duration(hours: 1))))
+        .toList();
+    _displayForecasts = filtered.isEmpty ? widget.forecasts : filtered;
+    _hasAnyRain = _displayForecasts.any((f) => (f.precipitationProbability ?? 0) > 0);
+    _chartWidth = _paddingLeft + (_itemWidth * _displayForecasts.length) + 16;
+  }
+
+  /// Rasteriza el chart a una imagen offscreen para que el scroll
+  /// no tenga que re-pintar el CustomPainter en cada frame.
+  Future<void> _rasterizeChart() async {
+    if (_displayForecasts.isEmpty) return;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final size = Size(_chartWidth, _chartHeight);
+
+    final painter = _HourlyChartPainter(
+      forecasts: _displayForecasts,
+      itemWidth: _itemWidth,
+      paddingLeft: _paddingLeft,
+    );
+    painter.paint(canvas, size);
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(
+      size.width.ceil(),
+      size.height.ceil(),
+    );
+    picture.dispose();
+
+    if (mounted) {
+      setState(() {
+        _chartImage?.dispose();
+        _chartImage = image;
+      });
+    } else {
+      image.dispose();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (forecasts.isEmpty) {
+    if (widget.forecasts.isEmpty) {
       return const Center(
         child: Text(
           'No hay datos horarios disponibles',
@@ -32,19 +118,13 @@ class HourlyView extends StatelessWidget {
       );
     }
 
-    // Filtramos para mostrar solo horas futuras o del día actual
-    final now = DateTime.now();
-    final filteredForecasts = forecasts
-        .where((f) => f.dateTime.isAfter(now.subtract(const Duration(hours: 1))))
-        .toList();
-
-    final displayForecasts =
-        filteredForecasts.isEmpty ? forecasts : filteredForecasts;
-
-    final bool hasAnyRain = displayForecasts.any((f) => (f.precipitationProbability ?? 0) > 0);
-
-    final itemWidth = 65.0;
-    final paddingLeft = 32.0;
+    // Rasterizar el chart si no hay cache
+    if (_chartImage == null && _displayForecasts.isNotEmpty) {
+      // Disparar rasterización asíncrona (solo la primera vez o tras invalidación)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_chartImage == null) _rasterizeChart();
+      });
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -60,7 +140,7 @@ class HourlyView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Título
+          // Título — estático, no necesita rebuild
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -79,44 +159,56 @@ class HourlyView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          // Contenido desplazable horizontalmente
+          // Contenido desplazable — RepaintBoundary aísla el scroll del resto
           RepaintBoundary(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Fila superior de información (Hora, icono, precipitación, viento, alertas)
-                Row(
+              child: SizedBox(
+                width: _chartWidth,
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(width: paddingLeft), // Espacio para el eje Y (máx/mín)
-                    ...List.generate(displayForecasts.length, (index) {
-                      final showDay = index == 0 || displayForecasts[index].dateTime.hour == 0;
-                      return SizedBox(
-                        width: itemWidth,
-                        child: _HourlyInfoColumn(
-                          forecast: displayForecasts[index],
-                          alerts: alerts,
-                          showDay: showDay,
-                          hasAnyRain: hasAnyRain,
-                        ),
-                      );
-                    }),
-                    const SizedBox(width: 16), // Padding final
+                    // Fila superior de información
+                    Padding(
+                      padding: EdgeInsets.only(left: _paddingLeft),
+                      child: Row(
+                        children: List.generate(_displayForecasts.length, (index) {
+                          final showDay = index == 0 || _displayForecasts[index].dateTime.hour == 0;
+                          return SizedBox(
+                            width: _itemWidth,
+                            child: _HourlyInfoColumn(
+                              forecast: _displayForecasts[index],
+                              alerts: widget.alerts,
+                              showDay: showDay,
+                              hasAnyRain: _hasAnyRain,
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                    // Gráfico — usa imagen rasterizada si está lista, fallback a CustomPaint
+                    SizedBox(
+                      width: _chartWidth,
+                      height: _chartHeight,
+                      child: _chartImage != null
+                          ? RawImage(
+                              image: _chartImage,
+                              fit: BoxFit.fill,
+                              width: _chartWidth,
+                              height: _chartHeight,
+                            )
+                          : CustomPaint(
+                              size: Size(_chartWidth, _chartHeight),
+                              painter: _HourlyChartPainter(
+                                forecasts: _displayForecasts,
+                                itemWidth: _itemWidth,
+                                paddingLeft: _paddingLeft,
+                              ),
+                            ),
+                    ),
                   ],
                 ),
-                // Gráfico continuo inferior
-                CustomPaint(
-                  size: Size(paddingLeft + (itemWidth * displayForecasts.length) + 16, 85),
-                  painter: _HourlyChartPainter(
-                    forecasts: displayForecasts,
-                    itemWidth: itemWidth,
-                    paddingLeft: paddingLeft,
-                  ),
-                ),
-                ],
               ),
             ),
           ),
@@ -163,7 +255,7 @@ class _HourlyInfoColumn extends StatelessWidget {
     return result;
   }
 
-  IconData _getIconForEvent(String event) {
+  static IconData _getIconForEvent(String event) {
     final text = event.toLowerCase();
     if (text.contains('viento')) return LucideIcons.wind;
     if (text.contains('costero') || text.contains('mar')) return LucideIcons.waves;
@@ -177,7 +269,7 @@ class _HourlyInfoColumn extends StatelessWidget {
     return Icons.warning;
   }
 
-  Color _getWindColor(int? speed) {
+  static Color _getWindColor(int? speed) {
     if (speed == null) return Colors.white70;
     if (speed >= 80) return Colors.redAccent.shade200;
     if (speed >= 65) return Colors.orange.shade400;
@@ -294,6 +386,25 @@ class _HourlyChartPainter extends CustomPainter {
   final double itemWidth;
   final double paddingLeft;
 
+  // Objetos Paint reutilizables — se crean una vez, no en cada paint()
+  static final Paint _guidePaint = Paint()
+    ..color = Colors.white.withValues(alpha: 0.1)
+    ..strokeWidth = 1;
+
+  static final Paint _verticalLinePaint = Paint()
+    ..color = Colors.white.withValues(alpha: 0.03)
+    ..strokeWidth = 1;
+
+  static final Paint _dotPaint = Paint()
+    ..color = Colors.white;
+
+  static const TextStyle _legendStyle = TextStyle(color: Colors.white54, fontSize: 10);
+  static const TextStyle _tempStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: FontWeight.bold,
+  );
+
   const _HourlyChartPainter({
     required this.forecasts,
     required this.itemWidth,
@@ -320,50 +431,46 @@ class _HourlyChartPainter extends CustomPainter {
     }
 
     final double paddingTop = 10.0;
-    final double paddingBottom = 25.0; // Espacio para el texto de temperatura debajo 
+    final double paddingBottom = 25.0;
     final double chartH = size.height - paddingTop - paddingBottom;
 
-    // Dibujar textos de leyenda (max y min) desplazables unidos al gráfico
-    final textStyle = const TextStyle(color: Colors.white54, fontSize: 10);
-    
+    // Dibujar textos de leyenda (max y min)
     final maxPainter = TextPainter(
-      text: TextSpan(text: '${maxT.round()}°', style: textStyle),
+      text: TextSpan(text: '${maxT.round()}°', style: _legendStyle),
       textDirection: ui.TextDirection.ltr,
     );
     maxPainter.layout();
     maxPainter.paint(canvas, Offset(8, paddingTop - maxPainter.height / 2));
 
     final minPainter = TextPainter(
-      text: TextSpan(text: '${minT.round()}°', style: textStyle),
+      text: TextSpan(text: '${minT.round()}°', style: _legendStyle),
       textDirection: ui.TextDirection.ltr,
     );
     minPainter.layout();
     minPainter.paint(canvas, Offset(8, size.height - paddingBottom - minPainter.height / 2));
 
-    // Dibujar líneas guía horizontales sutiles desde la izq.
-    final guidePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.1)
-      ..strokeWidth = 1;
-    canvas.drawLine(Offset(paddingLeft, paddingTop), Offset(size.width, paddingTop), guidePaint);
-    canvas.drawLine(Offset(paddingLeft, size.height - paddingBottom), Offset(size.width, size.height - paddingBottom), guidePaint);
+    // Líneas guía horizontales
+    canvas.drawLine(Offset(paddingLeft, paddingTop), Offset(size.width, paddingTop), _guidePaint);
+    canvas.drawLine(Offset(paddingLeft, size.height - paddingBottom), Offset(size.width, size.height - paddingBottom), _guidePaint);
 
     // Calcular puntos
-    List<Offset> points = [];
-    for (int i = 0; i < forecasts.length; i++) {
+    final points = List<Offset>.generate(forecasts.length, (i) {
       final t = forecasts[i].temperature?.toDouble() ?? minT;
       final x = paddingLeft + (i + 0.5) * itemWidth;
       final y = paddingTop + chartH * (1.0 - (t - minT) / (maxT - minT));
-      points.add(Offset(x, y));
-      
-      // Líneas verticales por cada hora
+      return Offset(x, y);
+    });
+
+    // Líneas verticales por cada hora (batch con el mismo paint)
+    for (int i = 0; i < points.length; i++) {
       canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        Paint()..color = Colors.white.withValues(alpha: 0.03)..strokeWidth = 1,
+        Offset(points[i].dx, 0),
+        Offset(points[i].dx, size.height),
+        _verticalLinePaint,
       );
     }
 
-    // Trazar línea de temperaturas usando curvas cuadráticas
+    // Trazar línea de temperaturas usando curvas cúbicas
     final path = Path();
     path.moveTo(points[0].dx, points[0].dy);
     for (int i = 0; i < points.length - 1; i++) {
@@ -373,14 +480,16 @@ class _HourlyChartPainter extends CustomPainter {
         path.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
     }
 
-    // Crear gradiente horizontal basado en la temperatura de cada punto
-    final tempColors = <Color>[];
-    final tempStops = <double>[];
-    for (int i = 0; i < points.length; i++) {
-      final t = forecasts[i].temperature?.toDouble() ?? minT;
-      tempColors.add(_colorForTemperature(t));
-      tempStops.add((points[i].dx - points.first.dx) / (points.last.dx - points.first.dx));
-    }
+    // Crear gradiente horizontal basado en la temperatura
+    final tempColors = List<Color>.generate(
+      points.length,
+      (i) => _colorForTemperature(forecasts[i].temperature?.toDouble() ?? minT),
+    );
+    final totalDx = points.last.dx - points.first.dx;
+    final tempStops = List<double>.generate(
+      points.length,
+      (i) => totalDx > 0 ? (points[i].dx - points.first.dx) / totalDx : 0.0,
+    );
 
     final tempGradient = ui.Gradient.linear(
       Offset(points.first.dx, 0),
@@ -389,14 +498,14 @@ class _HourlyChartPainter extends CustomPainter {
       tempStops,
     );
 
-    // Dibujar borde de la línea con gradiente de temperatura
+    // Dibujar borde de la línea con gradiente
     final strokePaint = Paint()
       ..shader = tempGradient
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke;
     canvas.drawPath(path, strokePaint);
 
-    // Pintar relleno sutil por debajo de la curva
+    // Pintar relleno sutil
     final fillPath = Path.from(path);
     fillPath.lineTo(points.last.dx, size.height);
     fillPath.lineTo(points.first.dx, size.height);
@@ -414,49 +523,34 @@ class _HourlyChartPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawPath(fillPath, fillPaint);
 
-    // Dibujar las temperaturas debajo de la línea
+    // Dibujar temperaturas y puntos
     for (int i = 0; i < points.length; i++) {
       final t = forecasts[i].temperature;
       if (t == null) continue;
 
       final tempPainter = TextPainter(
-        text: TextSpan(
-          text: '$t°', 
-          style: const TextStyle(
-            color: Colors.white, 
-            fontSize: 14, 
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        text: TextSpan(text: '$t°', style: _tempStyle),
         textDirection: ui.TextDirection.ltr,
       );
       tempPainter.layout();
-      
-      // Colocar debajo del punto
       tempPainter.paint(
         canvas, 
         Offset(points[i].dx - tempPainter.width / 2, points[i].dy + 8),
       );
       
-      // Dibujar también un circulito brillante en el punto
-      canvas.drawCircle(
-        points[i], 
-        2.5, 
-        Paint()..color = Colors.white,
-      );
+      canvas.drawCircle(points[i], 2.5, _dotPaint);
     }
   }
 
   /// Mapea una temperatura (°C) a un color con transición suave.
-  /// Rangos: ≤0° azul profundo → 10° cian → 18° verde → 25° amarillo → 32° naranja → ≥38° rojo
   static Color _colorForTemperature(double temp) {
     const stops = [
-      (temp: 0.0,  color: Color(0xFF2196F3)),  // Azul
-      (temp: 10.0, color: Color(0xFF00BCD4)),  // Cian
-      (temp: 18.0, color: Color(0xFF4CAF50)),  // Verde
-      (temp: 25.0, color: Color(0xFFFFEB3B)),  // Amarillo
-      (temp: 32.0, color: Color(0xFFFF9800)),  // Naranja
-      (temp: 38.0, color: Color(0xFFF44336)),  // Rojo
+      (temp: 0.0,  color: Color(0xFF2196F3)),
+      (temp: 10.0, color: Color(0xFF00BCD4)),
+      (temp: 18.0, color: Color(0xFF4CAF50)),
+      (temp: 25.0, color: Color(0xFFFFEB3B)),
+      (temp: 32.0, color: Color(0xFFFF9800)),
+      (temp: 38.0, color: Color(0xFFF44336)),
     ];
 
     if (temp <= stops.first.temp) return stops.first.color;
@@ -475,9 +569,7 @@ class _HourlyChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _HourlyChartPainter oldDelegate) {
     if (oldDelegate.itemWidth != itemWidth || oldDelegate.paddingLeft != paddingLeft) return true;
     if (oldDelegate.forecasts.length != forecasts.length) return true;
-    // Comparación superficial: si las referencias son iguales, no repintar
     if (identical(oldDelegate.forecasts, forecasts)) return false;
-    // Comparación por contenido
     for (int i = 0; i < forecasts.length; i++) {
       if (oldDelegate.forecasts[i].temperature != forecasts[i].temperature) return true;
     }
