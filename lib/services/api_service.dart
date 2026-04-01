@@ -13,7 +13,7 @@ class OpenMeteoApiService {
   /// Obtiene la predicción horaria y diaria en una sola petición a OpenMeteo.
   Future<Map<String, dynamic>> fetchForecast(double lat, double lon) async {
     final url = '$_baseUrl/forecast?latitude=$lat&longitude=$lon'
-        '&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,is_day'
+        '&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,is_day,dew_point_2m'
         '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max'
         '&timezone=auto';
         

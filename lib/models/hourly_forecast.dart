@@ -13,6 +13,7 @@ class HourlyForecast {
   final int? windSpeed;
   final String? windDirection;
   final int? windDirectionDegrees;
+  final int? dewPoint;
 
   HourlyForecast({
     required this.dateTime,
@@ -24,6 +25,7 @@ class HourlyForecast {
     this.windSpeed,
     this.windDirection,
     this.windDirectionDegrees,
+    this.dewPoint,
   });
 
   /// Parsea la respuesta columbar (arrays paralelos) de Open Meteo
@@ -41,6 +43,7 @@ class HourlyForecast {
     final windSpeed = hourly['wind_speed_10m'] as List<dynamic>? ?? [];
     final windDirection = hourly['wind_direction_10m'] as List<dynamic>? ?? [];
     final isDay = hourly['is_day'] as List<dynamic>? ?? [];
+    final dewPoint = hourly['dew_point_2m'] as List<dynamic>? ?? [];
 
     for (int i = 0; i < time.length; i++) {
         final date = DateTime.tryParse(time[i] as String);
@@ -75,6 +78,7 @@ class HourlyForecast {
           windSpeed: windSpeed.length > i ? (windSpeed[i] as num?)?.round() : null,
           windDirection: windDirStr,
           windDirectionDegrees: windDegrees,
+          dewPoint: dewPoint.length > i ? (dewPoint[i] as num?)?.round() : null,
         ));
     }
     

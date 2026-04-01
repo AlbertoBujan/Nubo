@@ -32,7 +32,7 @@ class _HourlyViewState extends State<HourlyView> {
   // Cache de la imagen del chart rasterizada para evitar re-paint costoso.
   ui.Image? _chartImage;
   double _chartWidth = 0;
-  final double _chartHeight = 85;
+  final double _chartHeight = 110;
 
   static const double _itemWidth = 65.0;
   static const double _paddingLeft = 32.0;
@@ -174,13 +174,11 @@ class _HourlyViewState extends State<HourlyView> {
                       padding: EdgeInsets.only(left: _paddingLeft),
                       child: Row(
                         children: List.generate(_displayForecasts.length, (index) {
-                          final showDay = index == 0 || _displayForecasts[index].dateTime.hour == 0;
                           return SizedBox(
                             width: _itemWidth,
                             child: _HourlyInfoColumn(
                               forecast: _displayForecasts[index],
                               alerts: widget.alerts,
-                              showDay: showDay,
                               hasAnyRain: _hasAnyRain,
                             ),
                           );
@@ -221,13 +219,11 @@ class _HourlyViewState extends State<HourlyView> {
 class _HourlyInfoColumn extends StatelessWidget {
   final HourlyForecast forecast;
   final List<WeatherAlert> alerts;
-  final bool showDay;
   final bool hasAnyRain;
 
   const _HourlyInfoColumn({
     required this.forecast,
     required this.alerts,
-    required this.showDay,
     required this.hasAnyRain,
   });
 
@@ -303,10 +299,10 @@ class _HourlyInfoColumn extends StatelessWidget {
       children: [
         SizedBox(
           height: 14,
-          child: showDay ? Text(
+          child: Text(
             _getDayLabel(),
             style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
-          ) : null,
+          ),
         ),
         SizedBox(
           height: 18,
@@ -398,11 +394,20 @@ class _HourlyChartPainter extends CustomPainter {
   static final Paint _dotPaint = Paint()
     ..color = Colors.white;
 
+  // Estilo para la línea del punto de rocío
+  static final Paint _dewDotPaint = Paint()
+    ..color = const Color(0xFF80DEEA);
+
   static const TextStyle _legendStyle = TextStyle(color: Colors.white54, fontSize: 10);
   static const TextStyle _tempStyle = TextStyle(
     color: Colors.white,
     fontSize: 14,
     fontWeight: FontWeight.bold,
+  );
+  static const TextStyle _dewTempStyle = TextStyle(
+    color: Color(0xFF80DEEA),
+    fontSize: 10,
+    fontWeight: FontWeight.w500,
   );
 
   const _HourlyChartPainter({
@@ -415,12 +420,19 @@ class _HourlyChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (forecasts.isEmpty) return;
 
+    // Calcular rango incluyendo tanto temperatura como punto de rocío
     double maxT = double.negativeInfinity;
     double minT = double.infinity;
+    bool hasDewData = false;
     for (var f in forecasts) {
       if (f.temperature != null) {
         if (f.temperature! > maxT) maxT = f.temperature!.toDouble();
         if (f.temperature! < minT) minT = f.temperature!.toDouble();
+      }
+      if (f.dewPoint != null) {
+        hasDewData = true;
+        if (f.dewPoint! > maxT) maxT = f.dewPoint!.toDouble();
+        if (f.dewPoint! < minT) minT = f.dewPoint!.toDouble();
       }
     }
 
@@ -429,6 +441,11 @@ class _HourlyChartPainter extends CustomPainter {
       maxT += 1;
       minT -= 1;
     }
+
+    // Añadir un poco de margen al rango para que las líneas no se peguen a los bordes
+    final range = maxT - minT;
+    maxT += range * 0.05;
+    minT -= range * 0.05;
 
     final double paddingTop = 10.0;
     final double paddingBottom = 25.0;
@@ -449,19 +466,24 @@ class _HourlyChartPainter extends CustomPainter {
     minPainter.layout();
     minPainter.paint(canvas, Offset(8, size.height - paddingBottom - minPainter.height / 2));
 
+
     // Líneas guía horizontales
     canvas.drawLine(Offset(paddingLeft, paddingTop), Offset(size.width, paddingTop), _guidePaint);
     canvas.drawLine(Offset(paddingLeft, size.height - paddingBottom), Offset(size.width, size.height - paddingBottom), _guidePaint);
 
-    // Calcular puntos
+    // Función helper para calcular Y a partir de un valor
+    double yForValue(double value) {
+      return paddingTop + chartH * (1.0 - (value - minT) / (maxT - minT));
+    }
+
+    // Calcular puntos de temperatura
     final points = List<Offset>.generate(forecasts.length, (i) {
       final t = forecasts[i].temperature?.toDouble() ?? minT;
       final x = paddingLeft + (i + 0.5) * itemWidth;
-      final y = paddingTop + chartH * (1.0 - (t - minT) / (maxT - minT));
-      return Offset(x, y);
+      return Offset(x, yForValue(t));
     });
 
-    // Líneas verticales por cada hora (batch con el mismo paint)
+    // Líneas verticales por cada hora
     for (int i = 0; i < points.length; i++) {
       canvas.drawLine(
         Offset(points[i].dx, 0),
@@ -469,6 +491,86 @@ class _HourlyChartPainter extends CustomPainter {
         _verticalLinePaint,
       );
     }
+
+    // --- Línea de punto de rocío (debajo, más sutil) ---
+    if (hasDewData) {
+      final dewPoints = List<Offset>.generate(forecasts.length, (i) {
+        final d = forecasts[i].dewPoint?.toDouble() ?? minT;
+        final x = paddingLeft + (i + 0.5) * itemWidth;
+        return Offset(x, yForValue(d));
+      });
+
+      // Icono de copo de nieve al inicio de la línea de rocío
+      final iconPainter = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(LucideIcons.snowflake.codePoint),
+          style: TextStyle(
+            fontFamily: LucideIcons.snowflake.fontFamily,
+            package: LucideIcons.snowflake.fontPackage,
+            fontSize: 12,
+            color: const Color(0xFF80DEEA),
+          ),
+        ),
+        textDirection: ui.TextDirection.ltr,
+      );
+      iconPainter.layout();
+      final iconY = dewPoints[0].dy - iconPainter.height / 2;
+      iconPainter.paint(canvas, Offset(paddingLeft + 8, iconY));
+
+      // Curva suave del punto de rocío
+      final dewPath = Path();
+      dewPath.moveTo(dewPoints[0].dx, dewPoints[0].dy);
+      for (int i = 0; i < dewPoints.length - 1; i++) {
+        final p0 = dewPoints[i];
+        final p1 = dewPoints[i + 1];
+        final midX = (p0.dx + p1.dx) / 2;
+        dewPath.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
+      }
+
+      // Línea punteada (dash) para el punto de rocío
+      final dewStrokePaint = Paint()
+        ..color = const Color(0xFF80DEEA).withValues(alpha: 0.7)
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke;
+
+      // Simular dash dibujando segmentos del path
+      final dewMetrics = dewPath.computeMetrics();
+      for (final metric in dewMetrics) {
+        double distance = 0;
+        const dashLen = 6.0;
+        const gapLen = 4.0;
+        while (distance < metric.length) {
+          final end = (distance + dashLen).clamp(0.0, metric.length);
+          final segment = metric.extractPath(distance, end);
+          canvas.drawPath(segment, dewStrokePaint);
+          distance += dashLen + gapLen;
+        }
+      }
+
+      // Puntos pequeños en cada hora para el rocío
+      for (int i = 0; i < dewPoints.length; i++) {
+        if (forecasts[i].dewPoint == null) continue;
+        canvas.drawCircle(dewPoints[i], 1.5, _dewDotPaint);
+      }
+
+      // Texto de punto de rocío en índices IMPARES (1, 3, 5...) para intercalar con temperatura
+      for (int i = 1; i < dewPoints.length; i += 2) {
+        final d = forecasts[i].dewPoint;
+        if (d == null) continue;
+
+        final dewTextPainter = TextPainter(
+          text: TextSpan(text: '$d°', style: _dewTempStyle),
+          textDirection: ui.TextDirection.ltr,
+        );
+        dewTextPainter.layout();
+        dewTextPainter.paint(
+          canvas,
+          Offset(dewPoints[i].dx - dewTextPainter.width / 2, dewPoints[i].dy + 6),
+        );
+      }
+    }
+
+    // --- Línea de temperatura (encima, prominente) ---
 
     // Trazar línea de temperaturas usando curvas cúbicas
     final path = Path();
@@ -523,20 +625,23 @@ class _HourlyChartPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawPath(fillPath, fillPaint);
 
-    // Dibujar temperaturas y puntos
+    // Dibujar temperaturas y puntos en índices PARES (0, 2, 4...) para intercalar con rocío
     for (int i = 0; i < points.length; i++) {
       final t = forecasts[i].temperature;
       if (t == null) continue;
 
-      final tempPainter = TextPainter(
-        text: TextSpan(text: '$t°', style: _tempStyle),
-        textDirection: ui.TextDirection.ltr,
-      );
-      tempPainter.layout();
-      tempPainter.paint(
-        canvas, 
-        Offset(points[i].dx - tempPainter.width / 2, points[i].dy + 8),
-      );
+      // Texto solo en índices pares
+      if (i.isEven) {
+        final tempPainter = TextPainter(
+          text: TextSpan(text: '$t°', style: _tempStyle),
+          textDirection: ui.TextDirection.ltr,
+        );
+        tempPainter.layout();
+        tempPainter.paint(
+          canvas, 
+          Offset(points[i].dx - tempPainter.width / 2, points[i].dy + 8),
+        );
+      }
       
       canvas.drawCircle(points[i], 2.5, _dotPaint);
     }
@@ -572,6 +677,7 @@ class _HourlyChartPainter extends CustomPainter {
     if (identical(oldDelegate.forecasts, forecasts)) return false;
     for (int i = 0; i < forecasts.length; i++) {
       if (oldDelegate.forecasts[i].temperature != forecasts[i].temperature) return true;
+      if (oldDelegate.forecasts[i].dewPoint != forecasts[i].dewPoint) return true;
     }
     return false;
   }
