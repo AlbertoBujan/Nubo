@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/daily_forecast.dart';
 import '../models/hourly_forecast.dart';
 import '../models/weather_alert.dart';
@@ -649,10 +650,10 @@ class _WeatherPageState extends State<_WeatherPage> {
                 children: [
                   Text(
                     data.currentTemp != null ? '${data.currentTemp}°' : '--°',
-                    style: const TextStyle(
+                    style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 72,
-                      fontWeight: FontWeight.w200,
+                      fontWeight: FontWeight.w300,
                       height: 1,
                     ),
                   ),

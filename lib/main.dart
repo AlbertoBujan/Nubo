@@ -36,6 +36,8 @@ class NuboApp extends StatelessWidget {
           useMaterial3: true,
           brightness: Brightness.dark,
           colorSchemeSeed: const Color(0xFF1A73E8),
+          // Establecer Inter como fuente predeterminada para toda la app
+          fontFamily: GoogleFonts.inter().fontFamily,
           // Tipografía moderna con Google Fonts (Inter)
           textTheme: GoogleFonts.interTextTheme(
             ThemeData.dark().textTheme,

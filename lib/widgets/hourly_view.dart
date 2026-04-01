@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/hourly_forecast.dart';
 import '../models/weather_enums.dart';
 import '../models/weather_alert.dart';
@@ -29,8 +30,6 @@ class _HourlyViewState extends State<HourlyView> {
   // Datos pre-computados que se calculan una sola vez cuando cambian los forecasts.
   List<HourlyForecast> _displayForecasts = const [];
   bool _hasAnyRain = false;
-  // Cache de la imagen del chart rasterizada para evitar re-paint costoso.
-  ui.Image? _chartImage;
   double _chartWidth = 0;
   final double _chartHeight = 110;
 
@@ -48,20 +47,8 @@ class _HourlyViewState extends State<HourlyView> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.forecasts, widget.forecasts) ||
         !identical(oldWidget.alerts, widget.alerts)) {
-      _invalidateChartCache();
       _computeDisplayData();
     }
-  }
-
-  @override
-  void dispose() {
-    _chartImage?.dispose();
-    super.dispose();
-  }
-
-  void _invalidateChartCache() {
-    _chartImage?.dispose();
-    _chartImage = null;
   }
 
   void _computeDisplayData() {
@@ -74,39 +61,6 @@ class _HourlyViewState extends State<HourlyView> {
     _chartWidth = _paddingLeft + (_itemWidth * _displayForecasts.length) + 16;
   }
 
-  /// Rasteriza el chart a una imagen offscreen para que el scroll
-  /// no tenga que re-pintar el CustomPainter en cada frame.
-  Future<void> _rasterizeChart() async {
-    if (_displayForecasts.isEmpty) return;
-
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    final size = Size(_chartWidth, _chartHeight);
-
-    final painter = _HourlyChartPainter(
-      forecasts: _displayForecasts,
-      itemWidth: _itemWidth,
-      paddingLeft: _paddingLeft,
-    );
-    painter.paint(canvas, size);
-
-    final picture = recorder.endRecording();
-    final image = await picture.toImage(
-      size.width.ceil(),
-      size.height.ceil(),
-    );
-    picture.dispose();
-
-    if (mounted) {
-      setState(() {
-        _chartImage?.dispose();
-        _chartImage = image;
-      });
-    } else {
-      image.dispose();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (widget.forecasts.isEmpty) {
@@ -116,14 +70,6 @@ class _HourlyViewState extends State<HourlyView> {
           style: TextStyle(color: Colors.white70, fontSize: 16),
         ),
       );
-    }
-
-    // Rasterizar el chart si no hay cache
-    if (_chartImage == null && _displayForecasts.isNotEmpty) {
-      // Disparar rasterización asíncrona (solo la primera vez o tras invalidación)
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_chartImage == null) _rasterizeChart();
-      });
     }
 
     return Container(
@@ -159,54 +105,45 @@ class _HourlyViewState extends State<HourlyView> {
             ),
           ),
           const SizedBox(height: 20),
-          // Contenido desplazable — RepaintBoundary aísla el scroll del resto
-          RepaintBoundary(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: SizedBox(
-                width: _chartWidth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Fila superior de información
-                    Padding(
-                      padding: EdgeInsets.only(left: _paddingLeft),
-                      child: Row(
-                        children: List.generate(_displayForecasts.length, (index) {
-                          return SizedBox(
-                            width: _itemWidth,
-                            child: _HourlyInfoColumn(
-                              forecast: _displayForecasts[index],
-                              alerts: widget.alerts,
-                              hasAnyRain: _hasAnyRain,
-                            ),
-                          );
-                        }),
+          // Contenido desplazable
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: SizedBox(
+              width: _chartWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Fila superior de información
+                  Padding(
+                    padding: EdgeInsets.only(left: _paddingLeft),
+                    child: Row(
+                      children: List.generate(_displayForecasts.length, (index) {
+                        return SizedBox(
+                          width: _itemWidth,
+                          child: _HourlyInfoColumn(
+                            forecast: _displayForecasts[index],
+                            alerts: widget.alerts,
+                            hasAnyRain: _hasAnyRain,
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                  // Gráfico
+                  SizedBox(
+                    width: _chartWidth,
+                    height: _chartHeight,
+                    child: CustomPaint(
+                      size: Size(_chartWidth, _chartHeight),
+                      painter: _HourlyChartPainter(
+                        forecasts: _displayForecasts,
+                        itemWidth: _itemWidth,
+                        paddingLeft: _paddingLeft,
                       ),
                     ),
-                    // Gráfico — usa imagen rasterizada si está lista, fallback a CustomPaint
-                    SizedBox(
-                      width: _chartWidth,
-                      height: _chartHeight,
-                      child: _chartImage != null
-                          ? RawImage(
-                              image: _chartImage,
-                              fit: BoxFit.fill,
-                              width: _chartWidth,
-                              height: _chartHeight,
-                            )
-                          : CustomPaint(
-                              size: Size(_chartWidth, _chartHeight),
-                              painter: _HourlyChartPainter(
-                                forecasts: _displayForecasts,
-                                itemWidth: _itemWidth,
-                                paddingLeft: _paddingLeft,
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -398,14 +335,14 @@ class _HourlyChartPainter extends CustomPainter {
   static final Paint _dewDotPaint = Paint()
     ..color = const Color(0xFF80DEEA);
 
-  static const TextStyle _legendStyle = TextStyle(color: Colors.white54, fontSize: 10);
-  static const TextStyle _tempStyle = TextStyle(
+  static final TextStyle _legendStyle = GoogleFonts.inter(color: Colors.white54, fontSize: 10);
+  static final TextStyle _tempStyle = GoogleFonts.inter(
     color: Colors.white,
     fontSize: 14,
     fontWeight: FontWeight.bold,
   );
-  static const TextStyle _dewTempStyle = TextStyle(
-    color: Color(0xFF80DEEA),
+  static final TextStyle _dewTempStyle = GoogleFonts.inter(
+    color: const Color(0xFF80DEEA),
     fontSize: 10,
     fontWeight: FontWeight.w500,
   );
