@@ -191,14 +191,14 @@ class _HourlyInfoColumn extends StatelessWidget {
   static IconData _getIconForEvent(String event) {
     final text = event.toLowerCase();
     if (text.contains('viento')) return LucideIcons.wind;
-    if (text.contains('costero') || text.contains('mar')) return LucideIcons.waves;
-    if (text.contains('lluvia') || text.contains('precip')) return LucideIcons.cloudRain;
-    if (text.contains('tormenta')) return LucideIcons.cloudLightning;
+    if (text.contains('costero')) return LucideIcons.waves;
+    if (text.contains('lluvia') || text.contains('precipita')) return LucideIcons.cloudRain;
     if (text.contains('nieve') || text.contains('nevada')) return LucideIcons.snowflake;
-    if (text.contains('niebla')) return LucideIcons.cloudFog;
+    if (text.contains('tormenta')) return LucideIcons.cloudLightning;
     if (text.contains('temperatura') || text.contains('calor') || text.contains('frío')) {
       return LucideIcons.thermometer;
     }
+    if (text.contains('niebla')) return LucideIcons.cloudFog;
     return Icons.warning;
   }
 
@@ -297,14 +297,16 @@ class _HourlyInfoColumn extends StatelessWidget {
         ),
         SizedBox(
           height: 16,
-          child: activeAlerts.isNotEmpty ? Wrap(
-            spacing: 2,
-            alignment: WrapAlignment.center,
+          child: activeAlerts.isNotEmpty ? Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: activeAlerts.map((alert) {
-              return Icon(
-                _getIconForEvent(alert.event),
-                color: alert.color,
-                size: 14,
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1.0),
+                child: Icon(
+                  _getIconForEvent(alert.event),
+                  color: alert.color,
+                  size: 14,
+                ),
               );
             }).toList(),
           ) : null,
