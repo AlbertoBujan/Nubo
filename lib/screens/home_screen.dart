@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/daily_forecast.dart';
@@ -31,12 +32,31 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late PageController _pageController;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _drawerWasClosedByBack = false;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
     _checkForUpdates();
+  }
+
+  void _handleBack() {
+    final scaffold = _scaffoldKey.currentState;
+    if (scaffold == null) return;
+
+    if (scaffold.isDrawerOpen) {
+      scaffold.closeDrawer();
+      _drawerWasClosedByBack = true;
+      return;
+    }
+
+    if (_drawerWasClosedByBack) {
+      SystemNavigator.pop();
+    } else {
+      scaffold.openDrawer();
+    }
   }
 
   Future<void> _checkForUpdates() async {
@@ -141,9 +161,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      drawer: const AppDrawer(),
-      body: Consumer<WeatherProvider>(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        drawer: const AppDrawer(),
+        onDrawerChanged: (isOpen) {
+          if (isOpen) _drawerWasClosedByBack = false;
+        },
+        body: Consumer<WeatherProvider>(
         builder: (context, provider, _) {
           // El contenido se pasa como `child` del AnimatedBuilder para que
           // NO se reconstruya en cada frame del scroll — solo el gradiente.
@@ -161,6 +190,7 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           );
         },
+      ),
       ),
     );
   }
@@ -322,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _TopBarButton(
                 icon: Icons.menu,
                 tooltip: 'Menú',
-                onTap: () => Scaffold.of(context).openDrawer(),
+                onTap: () => _scaffoldKey.currentState?.openDrawer(),
               ),
               
               // Indicador de refresco o texto de última actualización (derecha)

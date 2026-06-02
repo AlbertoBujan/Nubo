@@ -3,19 +3,22 @@ import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../providers/weather_provider.dart';
 import '../models/saved_location.dart';
+import '../services/background_update_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'search_location_sheet.dart';
 import 'info_dialog.dart';
 
-/// Drawer lateral con ajustes de la aplicación.
-///
-/// Secciones:
-/// - Localizaciones: lista de ciudades guardadas con opción de eliminar/añadir
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
   const AppDrawer({super.key});
 
+  @override
+  State<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
+  bool _showSettings = false;
+
   void _openSearch(BuildContext context) {
-    // Cerrar el drawer primero
     Navigator.of(context).pop();
     Future.microtask(() {
       if (context.mounted) {
@@ -89,84 +92,17 @@ class AppDrawer extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Cabecera del drawer ──────────────────────
-              _DrawerHeader(),
-
+              _DrawerHeader(
+                showingSettings: _showSettings,
+                onSettingsTap: () => setState(() => _showSettings = true),
+                onBackTap: () => setState(() => _showSettings = false),
+              ),
               const SizedBox(height: 8),
-
-              // ── Sección: Localizaciones ──────────────────
-              const _SectionHeader(
-                icon: Icons.location_on,
-                label: 'Localizaciones',
-              ),
-
-              // Lista de localizaciones guardadas
-              Expanded(
-                child: Consumer<WeatherProvider>(
-                  builder: (context, provider, _) {
-                    final locs = provider.savedLocations;
-                    if (locs.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'Sin localizaciones guardadas',
-                          style:
-                              TextStyle(color: Colors.white38, fontSize: 14),
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 4),
-                      itemCount: locs.length,
-                      itemBuilder: (context, index) {
-                        final loc = locs[index];
-                        final isActive = provider.currentIndex == index;
-
-                        return _LocationTile(
-                          loc: loc,
-                          isActive: isActive,
-                          onTap: () {
-                            provider.switchToIndex(index);
-                            Navigator.of(context).pop(); // cierra el drawer
-                          },
-                          onDelete: locs.length > 1
-                              ? () => _confirmRemove(
-                                    context,
-                                    provider,
-                                    index,
-                                    loc,
-                                  )
-                              : null,
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-
-              // ── Botón añadir localización ────────────────
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _openSearch(context),
-                    icon: const Icon(Icons.add_location_alt_outlined,
-                        size: 18),
-                    label: const Text('Añadir localización'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white70,
-                      side:
-                          BorderSide(color: Colors.white.withValues(alpha: 0.15)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: _showSettings
+                    ? _buildSettingsView()
+                    : _buildLocationsView(context),
               ),
             ],
           ),
@@ -174,11 +110,102 @@ class AppDrawer extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildLocationsView(BuildContext context) {
+    return Column(
+      key: const ValueKey('locations'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(
+          icon: Icons.location_on,
+          label: 'Localizaciones',
+        ),
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.55,
+          child: Consumer<WeatherProvider>(
+            builder: (context, provider, _) {
+              final locs = provider.savedLocations;
+              if (locs.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'Sin localizaciones guardadas',
+                    style: TextStyle(color: Colors.white38, fontSize: 14),
+                  ),
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                itemCount: locs.length,
+                itemBuilder: (context, index) {
+                  final loc = locs[index];
+                  final isActive = provider.currentIndex == index;
+                  return _LocationTile(
+                    loc: loc,
+                    isActive: isActive,
+                    onTap: () {
+                      provider.switchToIndex(index);
+                      Navigator.of(context).pop();
+                    },
+                    onDelete: locs.length > 1
+                        ? () => _confirmRemove(context, provider, index, loc)
+                        : null,
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _openSearch(context),
+              icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+              label: const Text('Añadir localización'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white70,
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingsView() {
+    return Column(
+      key: const ValueKey('settings'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(
+          icon: Icons.settings_outlined,
+          label: 'Ajustes',
+        ),
+        const _BackgroundUpdateSetting(),
+      ],
+    );
+  }
 }
 
-// ── Subwidgets internos ────────────────────────────────────────────────────────
+// ── Subwidgets ─────────────────────────────────────────────────────────────────
 
 class _DrawerHeader extends StatelessWidget {
+  final bool showingSettings;
+  final VoidCallback onSettingsTap;
+  final VoidCallback onBackTap;
+
+  const _DrawerHeader({
+    required this.showingSettings,
+    required this.onSettingsTap,
+    required this.onBackTap,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -186,53 +213,77 @@ class _DrawerHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  const Text(
-                    'Nubo',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
+          // Botón atrás en modo ajustes, o título en modo normal
+          if (showingSettings)
+            IconButton(
+              icon: const Icon(LucideIcons.chevronDown,
+                  color: Colors.white70, size: 20),
+              tooltip: 'Volver',
+              onPressed: onBackTap,
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    const Text(
+                      'Nubo',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  FutureBuilder<PackageInfo>(
-                    future: PackageInfo.fromPlatform(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasData) {
-                        return Text(
-                          'v${snapshot.data!.version}',
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    FutureBuilder<PackageInfo>(
+                      future: PackageInfo.fromPlatform(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData) {
+                          return Text(
+                            'v${snapshot.data!.version}',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+          // Botones de la derecha
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!showingSettings)
+                IconButton(
+                  icon: const Icon(LucideIcons.settings,
+                      color: Colors.white70, size: 20),
+                  tooltip: 'Ajustes',
+                  onPressed: onSettingsTap,
+                ),
+              IconButton(
+                icon: const Icon(LucideIcons.info,
+                    color: Colors.white70, size: 20),
+                tooltip: 'Información y créditos',
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  showDialog(
+                    context: context,
+                    builder: (context) => const InfoDialog(),
+                  );
+                },
               ),
             ],
-          ),
-          IconButton(
-            icon: Icon(LucideIcons.info, color: Colors.white70),
-            tooltip: 'Información y créditos',
-            onPressed: () {
-              Navigator.of(context).pop(); // Cierra el menú lateral primero
-              showDialog(
-                context: context,
-                builder: (context) => const InfoDialog(),
-              );
-            },
           ),
         ],
       ),
@@ -244,10 +295,7 @@ class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _SectionHeader({
-    required this.icon,
-    required this.label,
-  });
+  const _SectionHeader({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -266,7 +314,6 @@ class _SectionHeader extends StatelessWidget {
               letterSpacing: 1.2,
             ),
           ),
-          const Spacer(),
         ],
       ),
     );
@@ -302,9 +349,7 @@ class _LocationTile extends StatelessWidget {
       ),
       child: ListTile(
         dense: true,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         leading: Icon(
           isActive ? Icons.location_on : Icons.location_on_outlined,
           color: isActive ? Colors.blue.shade300 : Colors.white38,
@@ -314,8 +359,7 @@ class _LocationTile extends StatelessWidget {
           loc.nombre,
           style: TextStyle(
             color: isActive ? Colors.white : Colors.white70,
-            fontWeight:
-                isActive ? FontWeight.w600 : FontWeight.w400,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
             fontSize: 15,
           ),
         ),
@@ -329,6 +373,143 @@ class _LocationTile extends StatelessWidget {
               )
             : null,
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+// ── Widget de ajuste de actualización en segundo plano ────────────────────────
+
+class _BackgroundUpdateSetting extends StatefulWidget {
+  const _BackgroundUpdateSetting();
+
+  @override
+  State<_BackgroundUpdateSetting> createState() =>
+      _BackgroundUpdateSettingState();
+}
+
+class _BackgroundUpdateSettingState extends State<_BackgroundUpdateSetting> {
+  BackgroundUpdateInterval _current = BackgroundUpdateInterval.off;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    BackgroundUpdateService.getInterval().then((value) {
+      if (mounted) setState(() { _current = value; _loading = false; });
+    });
+  }
+
+  Future<void> _select(BackgroundUpdateInterval value) async {
+    setState(() => _current = value);
+    await BackgroundUpdateService.setInterval(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Actualización en segundo plano',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Mantén el tiempo de tus ciudades actualizado aunque la app esté cerrada.',
+            style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          if (_loading)
+            const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          else
+            ...BackgroundUpdateInterval.values.map((interval) {
+              return _SettingOption(
+                label: interval.label,
+                selected: _current == interval,
+                onTap: () => _select(interval),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SettingOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? Colors.blue.shade700.withValues(alpha: 0.25)
+              : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected
+                ? Colors.blue.shade400.withValues(alpha: 0.5)
+                : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Row(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? Colors.blue.shade300 : Colors.white38,
+                  width: 2,
+                ),
+              ),
+              child: selected
+                  ? Center(
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.blue.shade300,
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? Colors.white : Colors.white70,
+                fontSize: 14,
+                fontWeight:
+                    selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

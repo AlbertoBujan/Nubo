@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
     <!-- Permiso necesario para las peticiones HTTP a la API de AEMET -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Permisos de localización GPS -->
@@ -37,6 +38,17 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Desactiva el inicializador automático de WorkManager para inicializarlo manualmente -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

@@ -4,12 +4,16 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'providers/weather_provider.dart';
 import 'screens/home_screen.dart';
+import 'services/background_update_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Inicializar formateo de fechas en español
   await initializeDateFormatting('es_ES', null);
+
+  // Registrar el dispatcher de WorkManager para tareas en segundo plano
+  await BackgroundUpdateService.initialize();
 
   runApp(const NuboApp());
 }
