@@ -38,17 +38,7 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Desactiva el inicializador automático de WorkManager para inicializarlo manualmente -->
-        <provider
-            android:name="androidx.startup.InitializationProvider"
-            android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"
-            tools:node="merge">
-            <meta-data
-                android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup"
-                tools:node="remove" />
-        </provider>
+
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

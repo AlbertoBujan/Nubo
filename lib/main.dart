@@ -14,6 +14,9 @@ void main() async {
 
   // Registrar el dispatcher de WorkManager para tareas en segundo plano
   await BackgroundUpdateService.initialize();
+  // Re-registrar la tarea periódica si el usuario la tenía activada.
+  // Necesario tras reinstalaciones (WorkManager pierde su base de datos).
+  await BackgroundUpdateService.reregisterOnStartup();
 
   runApp(const NuboApp());
 }

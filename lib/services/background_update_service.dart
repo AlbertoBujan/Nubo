@@ -18,16 +18,28 @@ void callbackDispatcher() {
 
 Future<bool> _runBackgroundUpdate() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final startTime = DateTime.now().toIso8601String();
+  debugPrint('[BgUpdate] Tarea iniciada — $startTime');
+
   try {
     final storage = WeatherStorageRepositoryImpl();
     final locations = await storage.loadLocations();
-    if (locations.isEmpty) return true;
+
+    if (locations.isEmpty) {
+      debugPrint('[BgUpdate] Sin localizaciones guardadas — tarea completada (0 ciudades)');
+      return true;
+    }
+
+    debugPrint('[BgUpdate] Procesando ${locations.length} localización(es)');
 
     final locationRepo = LocationRepositoryImpl();
     final weatherRepo = WeatherRepositoryImpl(locationRepository: locationRepo);
     final alertRepo = AlertRepositoryImpl();
 
+    int successCount = 0;
+
     for (final loc in locations) {
+      debugPrint('[BgUpdate] Procesando: ${loc.municipioId}');
       try {
         final forecast = await weatherRepo.getForecast(loc.municipioId);
         final alerts = await alertRepo.getAlerts(loc.municipioId);
@@ -37,12 +49,18 @@ Future<bool> _runBackgroundUpdate() async {
           alerts: alerts,
           updatedAt: DateTime.now(),
         );
-      } catch (_) {
+        successCount++;
+        debugPrint('[BgUpdate] Guardado correctamente: ${loc.municipioId}');
+      } catch (e) {
         // fallo por ciudad → continuar con las demás
+        debugPrint('[BgUpdate] ERROR en ${loc.municipioId}: $e');
       }
     }
+
+    debugPrint('[BgUpdate] Tarea completada — $successCount/${locations.length} ciudades actualizadas');
     return true;
-  } catch (_) {
+  } catch (e) {
+    debugPrint('[BgUpdate] ERROR fatal en tarea de fondo: $e');
     return false;
   }
 }
@@ -77,6 +95,21 @@ class BackgroundUpdateService {
   /// Inicializa WorkManager. Llamar una sola vez en main() antes de runApp.
   static Future<void> initialize() async {
     await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+  }
+
+  /// Re-registra la tarea periódica al arrancar la app según la preferencia guardada.
+  /// Usa ExistingWorkPolicy.keep para no cancelar una tarea ya activa.
+  /// No llama cancelByUniqueName, por lo que es seguro llamarlo justo después de initialize().
+  static Future<void> reregisterOnStartup() async {
+    final interval = await getInterval();
+    if (interval == BackgroundUpdateInterval.off) return;
+    await Workmanager().registerPeriodicTask(
+      _uniqueTaskId,
+      taskName,
+      frequency: interval.frequency!,
+      constraints: Constraints(networkType: NetworkType.connected),
+      existingWorkPolicy: ExistingWorkPolicy.keep,
+    );
   }
 
   /// Lee el intervalo guardado (por defecto: off).

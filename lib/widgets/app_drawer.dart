@@ -98,11 +98,13 @@ class _AppDrawerState extends State<AppDrawer> {
                 onBackTap: () => setState(() => _showSettings = false),
               ),
               const SizedBox(height: 8),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: _showSettings
-                    ? _buildSettingsView()
-                    : _buildLocationsView(context),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: _showSettings
+                      ? _buildSettingsView()
+                      : _buildLocationsView(context),
+                ),
               ),
             ],
           ),
@@ -120,8 +122,7 @@ class _AppDrawerState extends State<AppDrawer> {
           icon: Icons.location_on,
           label: 'Localizaciones',
         ),
-        SizedBox(
-          height: MediaQuery.of(context).size.height * 0.55,
+        Expanded(
           child: Consumer<WeatherProvider>(
             builder: (context, provider, _) {
               final locs = provider.savedLocations;
