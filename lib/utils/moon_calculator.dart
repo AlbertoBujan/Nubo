@@ -33,9 +33,15 @@ class MoonCalculator {
     // Nombre de la fase
     final phaseName = _phaseName(phase);
 
-    // Moonrise y moonset por búsqueda iterativa
-    final moonrise = _findMoonEvent(date, lat, lng, true);
-    final moonset = _findMoonEvent(date, lat, lng, false);
+    // Moonrise: busca en la ventana de hoy; si la luna salió antes de medianoche,
+    // no hay cruce ascendente hoy → buscar en la ventana de ayer como fallback.
+    final moonrise = _findMoonEvent(date, lat, lng, true) ??
+        _findMoonEvent(date.subtract(const Duration(days: 1)), lat, lng, true);
+
+    // Moonset: análogamente, si el ocaso es después de la medianoche del día
+    // siguiente, no hay cruce descendente hoy → buscar en mañana como fallback.
+    final moonset = _findMoonEvent(date, lat, lng, false) ??
+        _findMoonEvent(date.add(const Duration(days: 1)), lat, lng, false);
 
     return MoonData(
       moonrise: moonrise,

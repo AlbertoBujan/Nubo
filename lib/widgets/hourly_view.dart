@@ -105,45 +105,50 @@ class _HourlyViewState extends State<HourlyView> {
             ),
           ),
           const SizedBox(height: 20),
-          // Contenido desplazable
+          // Contenido desplazable.
+          // RepaintBoundary aísla el contenido en su propia capa de GPU:
+          // durante el scroll Flutter solo traslada la textura cacheada,
+          // sin repintar los 24+ items ni el CustomPaint en cada frame.
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            child: SizedBox(
-              width: _chartWidth,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Fila superior de información
-                  Padding(
-                    padding: EdgeInsets.only(left: _paddingLeft),
-                    child: Row(
-                      children: List.generate(_displayForecasts.length, (index) {
-                        return SizedBox(
-                          width: _itemWidth,
-                          child: _HourlyInfoColumn(
-                            forecast: _displayForecasts[index],
-                            alerts: widget.alerts,
-                            hasAnyRain: _hasAnyRain,
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                  // Gráfico
-                  SizedBox(
-                    width: _chartWidth,
-                    height: _chartHeight,
-                    child: CustomPaint(
-                      size: Size(_chartWidth, _chartHeight),
-                      painter: _HourlyChartPainter(
-                        forecasts: _displayForecasts,
-                        itemWidth: _itemWidth,
-                        paddingLeft: _paddingLeft,
+            child: RepaintBoundary(
+              child: SizedBox(
+                width: _chartWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Fila superior de información
+                    Padding(
+                      padding: EdgeInsets.only(left: _paddingLeft),
+                      child: Row(
+                        children: List.generate(_displayForecasts.length, (index) {
+                          return SizedBox(
+                            width: _itemWidth,
+                            child: _HourlyInfoColumn(
+                              forecast: _displayForecasts[index],
+                              alerts: widget.alerts,
+                              hasAnyRain: _hasAnyRain,
+                            ),
+                          );
+                        }),
                       ),
                     ),
-                  ),
-                ],
+                    // Gráfico
+                    SizedBox(
+                      width: _chartWidth,
+                      height: _chartHeight,
+                      child: CustomPaint(
+                        size: Size(_chartWidth, _chartHeight),
+                        painter: _HourlyChartPainter(
+                          forecasts: _displayForecasts,
+                          itemWidth: _itemWidth,
+                          paddingLeft: _paddingLeft,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -456,33 +461,37 @@ class _HourlyChartPainter extends CustomPainter {
       final iconY = dewPoints[0].dy - iconPainter.height / 2;
       iconPainter.paint(canvas, Offset(paddingLeft + 8, iconY));
 
-      // Curva suave del punto de rocío
-      final dewPath = Path();
-      dewPath.moveTo(dewPoints[0].dx, dewPoints[0].dy);
-      for (int i = 0; i < dewPoints.length - 1; i++) {
-        final p0 = dewPoints[i];
-        final p1 = dewPoints[i + 1];
-        final midX = (p0.dx + p1.dx) / 2;
-        dewPath.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
-      }
-
-      // Línea punteada (dash) para el punto de rocío
+      // Línea punteada: drawLine por segmento lineal entre puntos consecutivos.
+      // Evita computeMetrics()+extractPath() (~156 ops de bezier) → O(n_puntos).
       final dewStrokePaint = Paint()
         ..color = const Color(0xFF80DEEA).withValues(alpha: 0.7)
         ..strokeWidth = 1.5
+        ..strokeCap = StrokeCap.round
         ..style = PaintingStyle.stroke;
 
-      // Simular dash dibujando segmentos del path
-      final dewMetrics = dewPath.computeMetrics();
-      for (final metric in dewMetrics) {
-        double distance = 0;
-        const dashLen = 6.0;
-        const gapLen = 4.0;
-        while (distance < metric.length) {
-          final end = (distance + dashLen).clamp(0.0, metric.length);
-          final segment = metric.extractPath(distance, end);
-          canvas.drawPath(segment, dewStrokePaint);
-          distance += dashLen + gapLen;
+      const dashLen = 6.0;
+      const gapLen = 4.0;
+      for (int i = 0; i < dewPoints.length - 1; i++) {
+        final p0 = dewPoints[i];
+        final p1 = dewPoints[i + 1];
+        final delta = p1 - p0;
+        final segLen = delta.distance;
+        if (segLen == 0) continue;
+        final unitDir = delta / segLen;
+        double walked = 0;
+        bool drawing = true;
+        while (walked < segLen) {
+          final step = drawing ? dashLen : gapLen;
+          final end = (walked + step).clamp(0.0, segLen);
+          if (drawing) {
+            canvas.drawLine(
+              p0 + unitDir * walked,
+              p0 + unitDir * end,
+              dewStrokePaint,
+            );
+          }
+          walked += step;
+          drawing = !drawing;
         }
       }
 

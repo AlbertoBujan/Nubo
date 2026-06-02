@@ -146,3 +146,6 @@ enum SkyCondition {
     return overcast; // 51+ (lluvia, nieve, tormenta, etc.)
   }
 }
+
+/// Fase solar del momento actual, usada para el fondo dinámico de la app.
+enum SunPhase { night, sunrise, day, sunset }

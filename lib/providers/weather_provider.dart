@@ -1,30 +1,29 @@
-import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/daily_forecast.dart';
 import '../models/hourly_forecast.dart';
 import '../models/saved_location.dart';
 import '../models/weather_alert.dart';
-import '../services/alert_service.dart';
-import '../services/api_service.dart';
-import '../services/location_service.dart';
-import '../services/municipio_search_service.dart';
 import '../utils/sun_calculator.dart';
 import '../utils/moon_calculator.dart';
+import '../utils/sky_gradients.dart';
 import '../models/weather_enums.dart';
-import 'dart:async';
+import '../services/api_service.dart' show OpenMeteoApiException;
+import '../services/location_service.dart' show LocationException;
+import '../repositories/weather_storage_repository.dart';
+import '../repositories/weather_repository.dart';
+import '../repositories/alert_repository.dart';
+import '../repositories/location_repository.dart';
 
 /// Provider principal para la gestión del estado meteorológico.
 ///
 /// Gestiona una lista de localizaciones guardadas, con caché de datos
 /// por ciudad para evitar recargas al deslizar el PageView.
 class WeatherProvider extends ChangeNotifier {
-  final OpenMeteoApiService _apiService;
-  final MunicipioSearchService _searchService;
-  final LocationService _locationService;
-  final AlertService _alertService;
-
-  static const String _prefsKey = 'saved_locations';
+  late final WeatherRepository _weatherRepo;
+  late final AlertRepository _alertRepo;
+  late final LocationRepository _locationRepo;
+  late final WeatherStorageRepository _storage;
 
   // --- Lista de localizaciones guardadas ---
   List<SavedLocation> _savedLocations = [];
@@ -199,19 +198,18 @@ class WeatherProvider extends ChangeNotifier {
   }
 
   WeatherProvider({
-    OpenMeteoApiService? apiService,
-    MunicipioSearchService? searchService,
-    LocationService? locationService,
-    AlertService? alertService,
-  })  : _apiService = apiService ?? OpenMeteoApiService(),
-        _searchService = searchService ?? MunicipioSearchService(),
-        _locationService = locationService ?? LocationService(),
-        _alertService = alertService ?? AlertService() {
-    // Iniciar timer para actualizar el fondo cada minuto
-    _bgTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      _updateSunPhase();
-    });
-    // Calcular fase solar inmediatamente al construir
+    WeatherRepository? weatherRepository,
+    AlertRepository? alertRepository,
+    LocationRepository? locationRepository,
+    WeatherStorageRepository? storage,
+  }) {
+    final locRepo = locationRepository ?? LocationRepositoryImpl();
+    _locationRepo = locRepo;
+    _alertRepo = alertRepository ?? AlertRepositoryImpl();
+    _weatherRepo = weatherRepository ?? WeatherRepositoryImpl(locationRepository: locRepo);
+    _storage = storage ?? WeatherStorageRepositoryImpl();
+
+    _bgTimer = Timer.periodic(const Duration(minutes: 1), (_) => _updateSunPhase());
     _updateSunPhase();
   }
 
@@ -225,30 +223,27 @@ class WeatherProvider extends ChangeNotifier {
   // Inicialización
   // ---------------------------------------------------------------------------
 
-  /// Carga las localizaciones guardadas desde SharedPreferences y
-  /// descarga el tiempo para la primera (si existe).
+  /// Carga las localizaciones guardadas y rehidrata la caché persistida.
   Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_prefsKey) ?? [];
-
-    _savedLocations = raw
-        .map(SavedLocation.fromPrefsString)
-        .whereType<SavedLocation>()
-        .toList();
-
-    // Ya no añadimos Madrid por defecto. La lista puede estar vacía.
-
-
+    _savedLocations = await _storage.loadLocations();
     _currentIndex = 0;
 
-    // Intentar recuperar los datos en caché de las localizaciones
-    await _loadPersistedWeatherData();
+    for (final loc in _savedLocations) {
+      final cached = await _storage.loadCachedWeather(loc.municipioId);
+      if (cached != null) {
+        _cache[loc.municipioId] = (
+          daily: cached.daily,
+          hourly: cached.hourly,
+          lastUpdated: cached.lastUpdated,
+        );
+        _alertsCache[loc.municipioId] = cached.alerts;
+        if (cached.sunTimes != null) {
+          _sunTimesCache[loc.municipioId] = cached.sunTimes!;
+        }
+      }
+    }
 
     notifyListeners();
-
-    // No disparamos de forma automática la carga con loadWeather.
-    // Solo mostramos lo que había en caché. Si está vacío, el usuario usará el botón.
-    // Sin embargo, si hemos actualizado el page view, notificaremos al fondo
     await _updateSunPhase();
   }
 
@@ -269,34 +264,26 @@ class WeatherProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final coords = await _searchService.getCoordinates(municipioId);
-      if (coords == null) throw Exception('No se encontraron coordenadas para la ubicación');
-
-      final result = await _apiService.fetchForecast(coords.lat, coords.lon);
-
-      final dailyList = DailyForecast.fromOpenMeteoJson(result);
-      final hourlyList = HourlyForecast.fromOpenMeteoJson(result);
+      final forecast = await _weatherRepo.getForecast(municipioId);
       final updatedTime = DateTime.now();
 
       _cache[municipioId] = (
-        daily: dailyList,
-        hourly: hourlyList,
+        daily: forecast.daily,
+        hourly: forecast.hourly,
         lastUpdated: updatedTime,
       );
       _errorMap[municipioId] = null;
 
-      // Cargar alertas en paralelo y esperar a que terminen para poder guardarlas en caché
       await _loadAlerts(municipioId);
 
-      // Persistir en memoria física al terminar la descarga API
-      await _persistWeatherData(
-        municipioId,
-        result,
-        _alertsCache[municipioId] ?? [], // Pasamos las alertas obtenidas
-        updatedTime,
+      await _storage.saveWeather(
+        municipioId: municipioId,
+        rawJson: forecast.rawJson,
+        alerts: _alertsCache[municipioId] ?? [],
+        sunTimes: _sunTimesCache[municipioId],
+        updatedAt: updatedTime,
       );
 
-      // Actualizar fase solar
       await _updateSunPhase();
     } on OpenMeteoApiException catch (e) {
       _errorMap[municipioId] = e.message;
@@ -320,14 +307,11 @@ class WeatherProvider extends ChangeNotifier {
     await loadWeather(id);
   }
 
-  /// Carga alertas meteorológicas para un municipio (no bloquea la UI).
   Future<void> _loadAlerts(String municipioId) async {
     try {
-      final alerts = await _alertService.fetchAlerts(municipioId);
-      _alertsCache[municipioId] = alerts;
+      _alertsCache[municipioId] = await _alertRepo.getAlerts(municipioId);
       notifyListeners();
     } catch (_) {
-      // Si falla, simplemente no mostramos alertas
       _alertsCache[municipioId] = [];
     }
   }
@@ -350,32 +334,26 @@ class WeatherProvider extends ChangeNotifier {
     }
   }
 
-  /// Recarga datos sin mostrar estado de carga (mantiene datos anteriores visibles).
   Future<void> _silentLoadWeather(String municipioId) async {
     try {
-      final coords = await _searchService.getCoordinates(municipioId);
-      if (coords == null) throw Exception('No coord');
-
-      final result = await _apiService.fetchForecast(coords.lat, coords.lon);
-
-      final dailyList = DailyForecast.fromOpenMeteoJson(result);
-      final hourlyList = HourlyForecast.fromOpenMeteoJson(result);
+      final forecast = await _weatherRepo.getForecast(municipioId);
       final updatedTime = DateTime.now();
 
       _cache[municipioId] = (
-        daily: dailyList,
-        hourly: hourlyList,
+        daily: forecast.daily,
+        hourly: forecast.hourly,
         lastUpdated: updatedTime,
       );
       _errorMap[municipioId] = null;
       _alertsCache.remove(municipioId);
       await _loadAlerts(municipioId);
 
-      await _persistWeatherData(
-        municipioId,
-        result,
-        _alertsCache[municipioId] ?? [],
-        updatedTime,
+      await _storage.saveWeather(
+        municipioId: municipioId,
+        rawJson: forecast.rawJson,
+        alerts: _alertsCache[municipioId] ?? [],
+        sunTimes: _sunTimesCache[municipioId],
+        updatedAt: updatedTime,
       );
       await _updateSunPhase();
     } catch (_) {
@@ -393,8 +371,8 @@ class WeatherProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final position = await _locationService.getCurrentPosition();
-      final nearest = await _searchService.findNearestMunicipio(
+      final position = await _locationRepo.getCurrentPosition();
+      final nearest = await _locationRepo.findNearest(
         position.latitude,
         position.longitude,
       );
@@ -461,9 +439,7 @@ class WeatherProvider extends ChangeNotifier {
     _loadingMap.remove(id);
     _sunTimesCache.remove(id);
 
-    // Eliminar también la persistencia en disco de estos datos
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('weather_data_$id');
+    await _storage.removeWeather(id);
 
     // Si quedó vacío, no añadimos Madrid por defecto.
 
@@ -517,7 +493,7 @@ class WeatherProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _searchResults = await _searchService.searchByName(query);
+      _searchResults = await _locationRepo.searchByName(query);
     } catch (_) {
       _searchResults = [];
     } finally {
@@ -552,81 +528,8 @@ class WeatherProvider extends ChangeNotifier {
     return closest;
   }
 
-  // ---------------------------------------------------------------------------
-  // Persistencia de caché
-  // ---------------------------------------------------------------------------
-
   Future<void> _persistLocations() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _prefsKey,
-      _savedLocations.map((l) => l.toPrefsString()).toList(),
-    );
-  }
-
-  Future<void> _persistWeatherData(
-      String municipioId, 
-      Map<String, dynamic> openMeteoJson,
-      List<WeatherAlert> currentAlerts,
-      DateTime updateTime,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final dataString = jsonEncode({
-      'openMeteo': openMeteoJson,
-      'alerts': currentAlerts.map((a) => a.toJson()).toList(), // Serializamos alertas
-      'sunTimes': _sunTimesCache[municipioId] != null ? {
-        'sunrise': _sunTimesCache[municipioId]!.sunrise.toIso8601String(),
-        'sunset': _sunTimesCache[municipioId]!.sunset.toIso8601String(),
-      } : null,
-      'lastUpdated': updateTime.toIso8601String(),
-    });
-    await prefs.setString('weather_data_$municipioId', dataString);
-  }
-
-  Future<void> _loadPersistedWeatherData() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    for (var loc in _savedLocations) {
-      final key = 'weather_data_${loc.municipioId}';
-      final jsonStr = prefs.getString(key);
-      
-      if (jsonStr != null) {
-        try {
-          final Map<String, dynamic> decoded = jsonDecode(jsonStr);
-          if (!decoded.containsKey('openMeteo')) throw Exception('Old data format');
-          
-          final daily = DailyForecast.fromOpenMeteoJson(decoded['openMeteo']);
-          final hourly = HourlyForecast.fromOpenMeteoJson(decoded['openMeteo']);
-          final updated = DateTime.parse(decoded['lastUpdated']);
-          
-          // Rehidratar alertas si existen en el JSON antiguo/nuevo
-          if (decoded.containsKey('alerts') && decoded['alerts'] != null) {
-            final List<dynamic> alertsRaw = decoded['alerts'];
-            _alertsCache[loc.municipioId] = alertsRaw
-                .map((a) => WeatherAlert.fromJson(a as Map<String, dynamic>))
-                .toList();
-          }
-
-          // Rehidratar SunTimes
-          if (decoded.containsKey('sunTimes') && decoded['sunTimes'] != null) {
-            final stMap = decoded['sunTimes'];
-            _sunTimesCache[loc.municipioId] = SunTimes(
-              sunrise: DateTime.parse(stMap['sunrise']).toLocal(),
-              sunset: DateTime.parse(stMap['sunset']).toLocal(),
-            );
-          }
-          
-          _cache[loc.municipioId] = (
-            daily: daily,
-            hourly: hourly,
-            lastUpdated: updated,
-          );
-        } catch (_) {
-          // Si el JSON está malformado o es de otra versión, se borra.
-          prefs.remove(key);
-        }
-      }
-    }
+    await _storage.saveLocations(_savedLocations);
   }
 
   // ---------------------------------------------------------------------------
@@ -641,7 +544,7 @@ class WeatherProvider extends ChangeNotifier {
 
     final id = currentMunicipioId;
     if (id.isNotEmpty) {
-      final coords = await _searchService.getCoordinates(id);
+      final coords = await _locationRepo.getCoordinates(id);
       if (coords != null) {
         lat = coords.lat;
         lon = coords.lon;
@@ -697,202 +600,12 @@ class WeatherProvider extends ChangeNotifier {
   LinearGradient gradientForMunicipio(String id) {
     final skyCode = id.isNotEmpty ? currentSkyCodeFor(id) : '';
     final sky = SkyCondition.fromCode(skyCode);
-
-    switch (_currentPhase) {
-      case SunPhase.day:
-        return _dayGradient(sky);
-      case SunPhase.sunrise:
-        return _sunriseGradient(sky);
-      case SunPhase.sunset:
-        return _sunsetGradient(sky);
-      default:
-        return _nightGradient(sky);
-    }
+    return SkyGradients.forPhase(_currentPhase, sky);
   }
 
   /// Interpola linealmente entre dos gradientes (ambos deben tener 4 colores).
-  static LinearGradient lerpGradient(LinearGradient a, LinearGradient b, double t) {
-    return LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Color.lerp(a.colors[0], b.colors[0], t)!,
-        Color.lerp(a.colors[1], b.colors[1], t)!,
-        Color.lerp(a.colors[2], b.colors[2], t)!,
-        Color.lerp(a.colors[3], b.colors[3], t)!,
-      ],
-      stops: const [0.0, 0.33, 0.67, 1.0],
-    );
-  }
-
-  // --- Gradientes de DÍA (4 stops) ---
-  LinearGradient _dayGradient(SkyCondition sky) {
-    switch (sky) {
-      case SkyCondition.clear:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF0F5298),
-            Color(0xFF1F73BA),
-            Color(0xFF3C99DC),
-            Color(0xFF4DA8E8),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-      case SkyCondition.partlyCloudy:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF4A6B8A),
-            Color(0xFF627D96),
-            Color(0xFF7A8FA0),
-            Color(0xFF9EAAB6),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-      case SkyCondition.overcast:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF4B5563),
-            Color(0xFF5A6370),
-            Color(0xFF6B7280),
-            Color(0xFF555E69),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-    }
-  }
-
-  // --- Gradientes de AMANECER (4 stops) ---
-  LinearGradient _sunriseGradient(SkyCondition sky) {
-    switch (sky) {
-      case SkyCondition.clear:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF141E30),
-            Color(0xFF243B55),
-            Color(0xFFCC2B5E),
-            Color(0xFF753A88),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-      case SkyCondition.partlyCloudy:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF2C3E50),
-            Color(0xFF5D6D7E),
-            Color(0xFF9B6B8A),
-            Color(0xFF8E99A4),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-      case SkyCondition.overcast:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF3D3D3D),
-            Color(0xFF4B4646),
-            Color(0xFF5A5050),
-            Color(0xFF6B6360),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-    }
-  }
-
-  // --- Gradientes de ATARDECER (4 stops) ---
-  LinearGradient _sunsetGradient(SkyCondition sky) {
-    switch (sky) {
-      case SkyCondition.clear:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF3E1E68),
-            Color(0xFF82306B),
-            Color(0xFFC6426E),
-            Color(0xFFF9A825),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-      case SkyCondition.partlyCloudy:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF3D3456),
-            Color(0xFF634760),
-            Color(0xFF8A5A6A),
-            Color(0xFF7A6E65),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-      case SkyCondition.overcast:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF3D3D3D),
-            Color(0xFF4C4444),
-            Color(0xFF5A4A4A),
-            Color(0xFF4A4545),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-    }
-  }
-
-  // --- Gradientes de NOCHE (4 stops) ---
-  LinearGradient _nightGradient(SkyCondition sky) {
-    switch (sky) {
-      case SkyCondition.clear:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF1A1A2E),
-            Color(0xFF16213E),
-            Color(0xFF0F3460),
-            Color(0xFF0A0A12),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-      case SkyCondition.partlyCloudy:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF1C2333),
-            Color(0xFF232938),
-            Color(0xFF2A2F3D),
-            Color(0xFF252830),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-      case SkyCondition.overcast:
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF1A1A1E),
-            Color(0xFF202023),
-            Color(0xFF252528),
-            Color(0xFF1E1E20),
-          ],
-          stops: [0.0, 0.33, 0.67, 1.0],
-        );
-    }
-  }
+  static LinearGradient lerpGradient(LinearGradient a, LinearGradient b, double t) =>
+      SkyGradients.lerp(a, b, t);
 }
 
-enum SunPhase { night, sunrise, day, sunset }
 
