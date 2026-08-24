@@ -15,6 +15,7 @@ import '../widgets/daily_view.dart';
 import '../widgets/sun_moon_card.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/search_location_sheet.dart';
+import '../widgets/weather_effects_overlay.dart';
 import '../services/update_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:lottie/lottie.dart';
@@ -185,7 +186,18 @@ class _HomeScreenState extends State<HomeScreen> {
               final gradient = _interpolatedGradient(provider);
               return DecoratedBox(
                 decoration: BoxDecoration(gradient: gradient),
-                child: child,
+                child: Stack(
+                  children: [
+                    // Lluvia y destellos van entre el gradiente y el contenido:
+                    // se ven sobre el cielo pero no ensucian textos ni tarjetas.
+                    Positioned.fill(
+                      child: WeatherEffectsOverlay(
+                        effect: _currentEffect(provider),
+                      ),
+                    ),
+                    child!,
+                  ],
+                ),
               );
             },
           );
@@ -193,6 +205,25 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       ),
     );
+  }
+
+  /// Efecto meteorológico de la página que se está viendo.
+  ///
+  /// A diferencia del gradiente, que se interpola durante el arrastre, aquí se
+  /// usa la página más cercana: mezclar dos sistemas de partículas a la vez
+  /// costaría el doble y apenas se percibe en el medio segundo que dura el
+  /// gesto. El propio overlay funde la entrada y la salida.
+  WeatherEffect _currentEffect(WeatherProvider provider) {
+    if (provider.savedLocations.isEmpty) return WeatherEffect.none;
+
+    final maxIndex = provider.savedLocations.length - 1;
+    final rawPage = _pageController.hasClients
+        ? (_pageController.page ?? provider.currentIndex.toDouble())
+        : provider.currentIndex.toDouble();
+    final index = rawPage.round().clamp(0, maxIndex);
+
+    final id = provider.savedLocations[index].municipioId;
+    return WeatherEffect.fromSkyCode(provider.currentSkyCodeFor(id));
   }
 
   /// Calcula el gradiente interpolado según la posición del PageController.
@@ -228,6 +259,27 @@ class _HomeScreenState extends State<HomeScreen> {
   // Flag para evitar que el postFrameCallback luche contra el gesto del usuario
   bool _isUserSwiping = false;
 
+  /// Confirma en el provider la página en la que ha quedado asentado el PageView.
+  ///
+  /// Deliberadamente NO se usa `onPageChanged`: ese callback salta en cuanto la
+  /// página redondeada cambia, es decir en pleno vuelo balístico después de
+  /// soltar el dedo. El `notifyListeners()` que dispara reconstruye el árbol
+  /// justo en los últimos frames del gesto, y ese frame perdido es el tirón que
+  /// se percibe al final del swipe. Esperando a `ScrollEndNotification`, el
+  /// trabajo pesado cae con la animación ya terminada.
+  ///
+  /// Mientras tanto la UI no se queda congelada: el gradiente de fondo y los
+  /// dots siguen al `PageController` fotograma a fotograma vía [AnimatedBuilder],
+  /// así que no dependen de que el índice del provider esté ya actualizado.
+  void _commitSettledPage(WeatherProvider provider) {
+    if (!_pageController.hasClients) return;
+
+    final settled = _pageController.page?.round();
+    if (settled == null || settled == provider.currentIndex) return;
+
+    provider.switchToIndex(settled);
+  }
+
   Widget _buildBodyContent(BuildContext context, WeatherProvider provider) {
     // Sincronizar PageController con el índice del provider SOLO
     // cuando el cambio viene del provider (ej: añadir ciudad), no del swipe.
@@ -253,19 +305,23 @@ class _HomeScreenState extends State<HomeScreen> {
               ? _buildWelcomeState(context)
               : NotificationListener<ScrollNotification>(
                   onNotification: (notification) {
+                    // Solo interesa el scroll del propio PageView. Sin este
+                    // filtro, el scroll vertical de la página y el carrusel de
+                    // horas —que burbujean hasta aquí— marcarían un swipe
+                    // horizontal que nunca ocurrió.
+                    if (notification.depth != 0) return false;
+
                     if (notification is ScrollStartNotification) {
                       _isUserSwiping = true;
                     } else if (notification is ScrollEndNotification) {
                       _isUserSwiping = false;
+                      _commitSettledPage(provider);
                     }
                     return false;
                   },
                   child: PageView.builder(
                     controller: _pageController,
                     itemCount: provider.savedLocations.length,
-                    onPageChanged: (index) {
-                      provider.switchToIndex(index);
-                    },
                     itemBuilder: (context, index) {
                       final loc = provider.savedLocations[index];
                       return _WeatherPage(
@@ -524,8 +580,8 @@ class _WeatherPageState extends State<_WeatherPage> {
         skyCode: provider.currentSkyCodeFor(widget.municipioId),
         skyDesc: provider.currentSkyDescriptionFor(widget.municipioId),
         tempRange: provider.todayTempRangeFor(widget.municipioId),
-        sunTimes: provider.currentSunTimes,
-        moonData: provider.currentMoonData,
+        sunTimes: provider.sunTimesFor(widget.municipioId),
+        moonData: provider.moonDataFor(widget.municipioId),
       ),
       shouldRebuild: (prev, next) => prev != next,
       builder: (context, data, _) {
@@ -720,7 +776,10 @@ class _WeatherPageState extends State<_WeatherPage> {
 
             // --- Caja 3: Ciclo solar y lunar ---
             RepaintBoundary(
-              child: SunMoonCard(provider: provider),
+              child: SunMoonCard(
+                sunTimes: data.sunTimes,
+                moonData: data.moonData,
+              ),
             ),
 
             const SizedBox(height: 20),

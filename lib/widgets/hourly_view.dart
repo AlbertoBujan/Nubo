@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/hourly_forecast.dart';
 import '../models/weather_enums.dart';
 import '../models/weather_alert.dart';
+import 'glass_card.dart';
 import 'wind_compass_arrow.dart';
 
 /// Vista horizontal de predicción por horas.
@@ -72,16 +73,14 @@ class _HourlyViewState extends State<HourlyView> {
       );
     }
 
-    return Container(
+    return GlassCard(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       padding: const EdgeInsets.only(top: 16, bottom: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-          width: 1,
-        ),
+      color: Colors.white.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(
+        color: Colors.white.withValues(alpha: 0.1),
+        width: 1,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

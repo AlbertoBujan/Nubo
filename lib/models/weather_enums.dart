@@ -147,5 +147,89 @@ enum SkyCondition {
   }
 }
 
+/// Agrupación de códigos WMO por familia de fenómeno, ordenada por severidad.
+///
+/// Se usa para decidir qué icono representa mejor un día completo a partir de
+/// sus horas (ver [DailyForecast.fromOpenMeteoJson]): permite contar horas por
+/// familia en vez de por código exacto, y comparar cuál es el fenómeno más
+/// relevante del día.
+enum WeatherCodeGroup {
+  /// Despejado (WMO 0).
+  clear(0),
+
+  /// Poco nuboso / intervalos nubosos (WMO 1, 2).
+  partlyCloudy(1),
+
+  /// Cubierto (WMO 3).
+  cloudy(2),
+
+  /// Niebla o niebla escarchada (WMO 45, 48).
+  fog(3),
+
+  /// Llovizna, incluida la helada (WMO 51-57).
+  drizzle(4),
+
+  /// Lluvia y chubascos, incluida la helada (WMO 61-67, 80-82).
+  rain(5),
+
+  /// Nieve, granizo menudo y chubascos de nieve (WMO 71-77, 85, 86).
+  snow(6),
+
+  /// Tormenta, con o sin granizo (WMO 95, 96, 99).
+  thunder(7);
+
+  const WeatherCodeGroup(this.severity);
+
+  /// Orden relativo de severidad; a mayor valor, fenómeno más relevante.
+  final int severity;
+
+  /// Familias que describen un fenómeno concreto (no solo nubosidad).
+  ///
+  /// Solo estas pueden "adueñarse" del icono del día, y únicamente si duran
+  /// las horas mínimas que exige [minHours].
+  bool get isSignificant => severity >= WeatherCodeGroup.fog.severity;
+
+  /// Horas mínimas que debe durar el fenómeno para representar al día entero.
+  ///
+  /// Las tormentas bajan el umbral porque son relevantes aunque sean breves.
+  int get minHours => switch (this) {
+        WeatherCodeGroup.thunder => 2,
+        _ => isSignificant ? 3 : 0,
+      };
+
+  /// Clasifica un código WMO (con posible sufijo 'n' de noche) en su familia.
+  static WeatherCodeGroup fromCode(String? code) {
+    final numeric = numericValue(code);
+    if (numeric == null) return clear;
+
+    if (numeric == 0) return clear;
+    if (numeric <= 2) return partlyCloudy;
+    if (numeric == 3) return cloudy;
+    if (numeric == 45 || numeric == 48) return fog;
+    if (numeric >= 51 && numeric <= 57) return drizzle;
+    if (numeric >= 61 && numeric <= 67) return rain;
+    if (numeric >= 71 && numeric <= 77) return snow;
+    if (numeric >= 80 && numeric <= 82) return rain;
+    if (numeric == 85 || numeric == 86) return snow;
+    if (numeric >= 95) return thunder;
+    return clear;
+  }
+
+  /// Extrae la parte numérica de un código WMO, ignorando el sufijo 'n'.
+  static int? numericValue(String? code) {
+    if (code == null || code.isEmpty) return null;
+    return int.tryParse(code.replaceAll('n', ''));
+  }
+
+  /// Familias en las que cae agua, y que por tanto pintan gotas en el fondo.
+  bool get hasRain =>
+      this == WeatherCodeGroup.drizzle ||
+      this == WeatherCodeGroup.rain ||
+      this == WeatherCodeGroup.thunder;
+
+  /// Familias que además pintan destellos de rayo.
+  bool get hasThunder => this == WeatherCodeGroup.thunder;
+}
+
 /// Fase solar del momento actual, usada para el fondo dinámico de la app.
 enum SunPhase { night, sunrise, day, sunset }

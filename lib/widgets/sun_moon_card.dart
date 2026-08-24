@@ -2,18 +2,25 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../providers/weather_provider.dart';
+import '../utils/moon_calculator.dart';
+import '../utils/sun_calculator.dart';
+import 'glass_card.dart';
 
 /// Tarjeta dual Sol + Luna con arcos animados estilo Breezy Weather.
+///
+/// Recibe los datos ya resueltos en vez del provider para que la tarjeta
+/// pertenezca a la página que la muestra: si leyera los getters globales
+/// del provider, cambiaría de ciudad a la vez que el índice activo.
 class SunMoonCard extends StatelessWidget {
-  final WeatherProvider provider;
+  final SunTimes? sunTimes;
+  final MoonData? moonData;
 
-  const SunMoonCard({super.key, required this.provider});
+  const SunMoonCard({super.key, required this.sunTimes, required this.moonData});
 
   @override
   Widget build(BuildContext context) {
-    final sunTimes = provider.currentSunTimes;
-    final moonData = provider.currentMoonData;
+    final sunTimes = this.sunTimes;
+    final moonData = this.moonData;
     if (sunTimes == null) return const SizedBox.shrink();
 
     return Padding(
@@ -128,15 +135,13 @@ class _ArcCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = _progress();
 
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-          width: 1,
-        ),
+      color: Colors.white.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(
+        color: Colors.white.withValues(alpha: 0.1),
+        width: 1,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

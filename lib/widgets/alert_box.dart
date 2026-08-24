@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/weather_alert.dart';
+import 'glass_card.dart';
 
 /// Widget que muestra las alertas meteorológicas activas agrupadas por tipo.
 class AlertBox extends StatelessWidget {
@@ -100,13 +101,11 @@ class _AlertGroupTileState extends State<_AlertGroupTile> {
   Widget build(BuildContext context) {
     final color = _maxSeverityColor;
 
-    return Container(
+    return GlassCard(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: _backgroundColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color, width: 1.5),
-      ),
+      color: _backgroundColor,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: color, width: 1.5),
       child: Column(
         children: [
           // Cabecera del grupo (siempre visible)

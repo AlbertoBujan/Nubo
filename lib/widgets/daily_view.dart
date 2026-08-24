@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/daily_forecast.dart';
 import '../models/weather_enums.dart';
 import '../models/weather_alert.dart';
+import 'glass_card.dart';
 
 /// Vista vertical de predicción por días.
 ///
@@ -144,15 +145,13 @@ class _DailyRow extends StatelessWidget {
 
     return Stack(
       children: [
-        Container(
+        GlassCard(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: isToday
-                ? Colors.white.withValues(alpha: 0.1)
-                : Colors.white.withValues(alpha: 0.05),
-          ),
+          borderRadius: BorderRadius.circular(16),
+          color: isToday
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.white.withValues(alpha: 0.05),
           child: Row(
             children: [
               // Nombre del día

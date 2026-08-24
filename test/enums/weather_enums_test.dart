@@ -116,4 +116,66 @@ void main() {
       expect(SkyCondition.fromCode('abc'), SkyCondition.clear);
     });
   });
+
+  group('WeatherCodeGroup.fromCode', () {
+    test('clasifica cada familia por su código WMO', () {
+      expect(WeatherCodeGroup.fromCode('0'), WeatherCodeGroup.clear);
+      expect(WeatherCodeGroup.fromCode('1'), WeatherCodeGroup.partlyCloudy);
+      expect(WeatherCodeGroup.fromCode('2'), WeatherCodeGroup.partlyCloudy);
+      expect(WeatherCodeGroup.fromCode('3'), WeatherCodeGroup.cloudy);
+      expect(WeatherCodeGroup.fromCode('45'), WeatherCodeGroup.fog);
+      expect(WeatherCodeGroup.fromCode('48'), WeatherCodeGroup.fog);
+      expect(WeatherCodeGroup.fromCode('53'), WeatherCodeGroup.drizzle);
+      expect(WeatherCodeGroup.fromCode('63'), WeatherCodeGroup.rain);
+      expect(WeatherCodeGroup.fromCode('73'), WeatherCodeGroup.snow);
+      expect(WeatherCodeGroup.fromCode('77'), WeatherCodeGroup.snow);
+      expect(WeatherCodeGroup.fromCode('81'), WeatherCodeGroup.rain);
+      expect(WeatherCodeGroup.fromCode('86'), WeatherCodeGroup.snow);
+      expect(WeatherCodeGroup.fromCode('95'), WeatherCodeGroup.thunder);
+      expect(WeatherCodeGroup.fromCode('99'), WeatherCodeGroup.thunder);
+    });
+
+    test('ignora el sufijo nocturno', () {
+      expect(WeatherCodeGroup.fromCode('61n'), WeatherCodeGroup.rain);
+      expect(WeatherCodeGroup.fromCode('0n'), WeatherCodeGroup.clear);
+    });
+
+    test('código nulo o inválido → clear', () {
+      expect(WeatherCodeGroup.fromCode(null), WeatherCodeGroup.clear);
+      expect(WeatherCodeGroup.fromCode(''), WeatherCodeGroup.clear);
+      expect(WeatherCodeGroup.fromCode('abc'), WeatherCodeGroup.clear);
+    });
+
+    test('la severidad crece con la relevancia del fenómeno', () {
+      expect(WeatherCodeGroup.clear.severity,
+          lessThan(WeatherCodeGroup.rain.severity));
+      expect(WeatherCodeGroup.rain.severity,
+          lessThan(WeatherCodeGroup.thunder.severity));
+    });
+
+    test('solo los fenómenos concretos son significativos', () {
+      expect(WeatherCodeGroup.clear.isSignificant, isFalse);
+      expect(WeatherCodeGroup.partlyCloudy.isSignificant, isFalse);
+      expect(WeatherCodeGroup.cloudy.isSignificant, isFalse);
+      expect(WeatherCodeGroup.fog.isSignificant, isTrue);
+      expect(WeatherCodeGroup.thunder.isSignificant, isTrue);
+    });
+
+    test('la tormenta exige menos horas que el resto', () {
+      expect(WeatherCodeGroup.thunder.minHours,
+          lessThan(WeatherCodeGroup.rain.minHours));
+      expect(WeatherCodeGroup.clear.minHours, 0);
+    });
+
+    test('hasRain / hasThunder identifican la precipitación líquida', () {
+      expect(WeatherCodeGroup.drizzle.hasRain, isTrue);
+      expect(WeatherCodeGroup.rain.hasRain, isTrue);
+      expect(WeatherCodeGroup.thunder.hasRain, isTrue);
+      expect(WeatherCodeGroup.snow.hasRain, isFalse);
+      expect(WeatherCodeGroup.cloudy.hasRain, isFalse);
+
+      expect(WeatherCodeGroup.thunder.hasThunder, isTrue);
+      expect(WeatherCodeGroup.rain.hasThunder, isFalse);
+    });
+  });
 }

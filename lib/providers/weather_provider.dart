@@ -58,6 +58,9 @@ class WeatherProvider extends ChangeNotifier {
   SunPhase _currentPhase = SunPhase.night;
   final Map<String, SunTimes> _sunTimesCache = {};
   final Map<String, MoonData> _moonDataCache = {};
+
+  /// Gradientes ya resueltos por municipio. Ver [gradientForMunicipio].
+  final Map<String, LinearGradient> _gradientCache = {};
   Timer? _bgTimer;
 
   // --- Estado de refresco global (pull-to-refresh) ---
@@ -66,8 +69,18 @@ class WeatherProvider extends ChangeNotifier {
   // --- Getters ---
   List<SavedLocation> get savedLocations => _savedLocations;
   SunPhase get currentPhase => _currentPhase;
-  SunTimes? get currentSunTimes => _sunTimesCache[currentMunicipioId];
-  MoonData? get currentMoonData => _moonDataCache[currentMunicipioId];
+  SunTimes? get currentSunTimes => sunTimesFor(currentMunicipioId);
+  MoonData? get currentMoonData => moonDataFor(currentMunicipioId);
+
+  /// Horas de sol de un municipio concreto.
+  ///
+  /// Las páginas del PageView deben usar esta versión y no [currentSunTimes]:
+  /// el getter global depende del índice activo, así que al cambiar de página
+  /// mutaría a la vez para todas y forzaría a reconstruirlas todas.
+  SunTimes? sunTimesFor(String id) => _sunTimesCache[id];
+
+  /// Datos lunares de un municipio concreto. Ver nota en [sunTimesFor].
+  MoonData? moonDataFor(String id) => _moonDataCache[id];
   int get currentIndex => _currentIndex;
   bool get isLocating => _isLocating;
   List<SavedLocation> get searchResults => _searchResults;
@@ -438,6 +451,9 @@ class WeatherProvider extends ChangeNotifier {
     _errorMap.remove(id);
     _loadingMap.remove(id);
     _sunTimesCache.remove(id);
+    _moonDataCache.remove(id);
+    _alertsCache.remove(id);
+    _gradientCache.remove(id);
 
     await _storage.removeWeather(id);
 
@@ -587,7 +603,13 @@ class WeatherProvider extends ChangeNotifier {
     if (_currentPhase != newPhase) {
       _currentPhase = newPhase;
     }
-    
+
+    // Se invalida siempre, no solo al cambiar de fase: el código de cielo
+    // depende de la hora más cercana, que también se mueve con el tiempo.
+    // Como este método corre cada minuto, la caché nunca queda obsoleta.
+    _gradientCache.clear();
+
+
     // Siempre notificamos, ya que las vistas pueden estar bloqueadas a la espera 
     // de que _sunTimesCache esté rellenado.
     notifyListeners();
@@ -597,10 +619,22 @@ class WeatherProvider extends ChangeNotifier {
   LinearGradient get backgroundGradient => gradientForMunicipio(currentMunicipioId);
 
   /// Gradiente de fondo para un municipio concreto (usado para interpolar en swipe).
+  ///
+  /// El resultado se memoriza porque durante el swipe se pide dos veces por
+  /// fotograma, y resolver el código de cielo implica recorrer todas las horas
+  /// de la predicción buscando la más cercana. Sus entradas (fase solar y hora
+  /// actual) solo cambian cuando corre [_updateSunPhase], que es quien invalida
+  /// la caché, así que memorizar no introduce desfase perceptible.
   LinearGradient gradientForMunicipio(String id) {
+    final cached = _gradientCache[id];
+    if (cached != null) return cached;
+
     final skyCode = id.isNotEmpty ? currentSkyCodeFor(id) : '';
     final sky = SkyCondition.fromCode(skyCode);
-    return SkyGradients.forPhase(_currentPhase, sky);
+    final gradient = SkyGradients.forPhase(_currentPhase, sky);
+
+    _gradientCache[id] = gradient;
+    return gradient;
   }
 
   /// Interpola linealmente entre dos gradientes (ambos deben tener 4 colores).
