@@ -29,6 +29,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Sirve el APK descargado al instalador del sistema: desde Android 7
+             no se puede compartir un file:// con otra aplicación. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>
