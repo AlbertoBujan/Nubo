@@ -40,6 +40,15 @@ class MunicipioSearchService(
         val searchable: List<String>,
         val lat: Double?,
         val lon: Double?,
+        /**
+         * Zona de aviso de AEMET a la que pertenece el municipio.
+         *
+         * Seis dígitos: área (2) + provincia (2) + zona dentro de la provincia
+         * (2). Es el mismo código que viaja en el `geocode` de cada aviso CAP,
+         * así que es lo que permite quedarse solo con los avisos que de verdad
+         * afectan al municipio. Ver [AlertService].
+         */
+        val zonaAviso: String?,
     )
 
     private suspend fun ensureLoaded() {
@@ -78,6 +87,7 @@ class MunicipioSearchService(
                 searchable = listOf(normalize(nombre), normalize(display)).distinct(),
                 lat = parseDecimal(item, "latitud_dec"),
                 lon = parseDecimal(item, "longitud_dec"),
+                zonaAviso = parseZonaAviso(item),
             )
         }
         return result
@@ -123,6 +133,18 @@ class MunicipioSearchService(
         return nearest?.let { SavedLocation.of(it.id, it.nombre) }
     }
 
+    /**
+     * Zona de aviso de AEMET de un municipio, o `null` si el maestro no la
+     * trae o no se pudo descargar.
+     */
+    suspend fun getZonaAviso(municipioId: String): String? {
+        if (municipioId.isBlank()) return null
+        ensureLoaded()
+
+        val id = municipioId.removePrefix("id")
+        return municipios.firstOrNull { it.id == id }?.zonaAviso
+    }
+
     /** Coordenadas de un municipio por su código INE. */
     suspend fun getCoordinates(municipioId: String): Coordinates? {
         if (municipioId.isBlank()) return null
@@ -137,6 +159,19 @@ class MunicipioSearchService(
 
     internal companion object {
         const val MAX_RESULTS = 10
+
+        /**
+         * Lee `zona_comarcal` del maestro, exigiendo los 6 dígitos.
+         *
+         * Se valida el formato en vez de aceptar lo que venga porque de este
+         * campo depende qué avisos se muestran: un valor raro debe dejar al
+         * municipio sin avisos, nunca colarle los de otra zona.
+         */
+        fun parseZonaAviso(item: JSONObject): String? =
+            item.optString("zona_comarcal").trim().takeIf { ZONA_AVISO.matches(it) }
+
+        /** Área (2) + provincia (2) + zona (2). */
+        val ZONA_AVISO = Regex("""\d{6}""")
 
         /** AEMET publica los decimales con coma en algunos registros. */
         fun parseDecimal(item: JSONObject, key: String): Double? =

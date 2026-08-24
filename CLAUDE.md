@@ -44,9 +44,9 @@ Dependencies are resolved by hand in `di/ServiceLocator.kt` — no Hilt. One Vie
 
 Key components:
 - `data/remote/OpenMeteoApi.kt` — one call returns hourly + daily. Returns the **raw JSON**, which is what gets cached, so the cache does not break when model shapes change.
-- `data/remote/AemetApi.kt` — AEMET's two-step protocol: the endpoint returns a signed URL in `datos`, and the payload is fetched from there. Also holds `AemetAreas.provinciaToArea`, a hand-built INE-province → AEMET-area table that is not documented anywhere.
-- `data/remote/AlertService.kt` — CAP parsing. AEMET concatenates several `<alert>` blocks in one body, so they are split with a regex before parsing. The regex uses a negative lookahead so a truncated block does not swallow the next valid one.
-- `data/remote/MunicipioSearchService.kt` — downloads AEMET's ~8.000-municipality master once and keeps it in memory. Indexes both AEMET's name form ("Palmas de Gran Canaria, Las") and the natural one ("Las Palmas de Gran Canaria").
+- `data/remote/AemetApi.kt` — AEMET's two-step protocol: the endpoint returns a signed URL in `datos`, and the payload is fetched from there.
+- `data/remote/AlertService.kt` — CAP parsing. AEMET concatenates several `<alert>` blocks in one body, so they are split with a regex before parsing. The regex uses a negative lookahead so a truncated block does not swallow the next valid one. Alerts are matched **by the full 6-digit warning zone**, not by a province prefix — see below.
+- `data/remote/MunicipioSearchService.kt` — downloads AEMET's ~8.000-municipality master once and keeps it in memory. Indexes both AEMET's name form ("Palmas de Gran Canaria, Las") and the natural one ("Las Palmas de Gran Canaria"). Also the single source of the **warning zone** (`zona_comarcal`), which is why the alert repository depends on it.
 - `data/local/WeatherStorage.kt` — DataStore. Stores the raw Open-Meteo JSON plus alerts and sun times per municipality.
 - `data/local/FlutterPreferencesMigration.kt` — **do not delete while Flutter users remain.** Reads the SharedPreferences the Flutter app left behind (same package) so updating does not wipe saved cities. The value format is `<base64 prefix>!<json>`; the `!` is undocumented and was found by dumping the real file.
 - `domain/astro/SunCalc.kt` — own port of the SunCalc algorithms, replacing the Dart packages. Validated against physical facts (solstice day lengths, polar night, synodic month) rather than copied values.
@@ -58,6 +58,16 @@ Key components:
 Time handling: Open-Meteo returns timestamps already in the location's timezone (`timezone=auto`), so they are parsed as `LocalDateTime` and treated as device-local — the same simplification the Flutter app made.
 
 `java.time` works on `minSdk 24` thanks to core library desugaring, enabled in `app/build.gradle.kts`.
+
+### AEMET warning zones
+
+AEMET issues warnings per **zone**, which is sub-provincial: A Coruña has four, and three of them are coastal. The zone is the 6-digit `geocode` in each CAP alert — area (2) + INE province (2) + zone (2).
+
+The zone of a municipality is the `zona_comarcal` field of AEMET's municipality master, and it matches that geocode exactly. All 8.122 municipalities carry it, so there is no fallback path to maintain.
+
+Until v1.0.0 the filter compared only the first 4 digits, so every municipality got the warnings of its whole province — an inland town showed coastal warnings. Matching the full zone is what fixes it, and it must stay an **equality** check: a prefix comparison is what caused the bug.
+
+The first 2 digits of the zone are the AEMET area the endpoint is queried by, so no province → area table is needed. The hand-built one that used to live in `AemetApi.kt` was verified to agree with `zona_comarcal[:2]` for all 8.122 municipalities and then deleted. Note it never worked in the Canary and Balearic Islands anyway: there AEMET does not use INE province digits in the zone code (Adeje is `659603`).
 
 ## Gotchas
 

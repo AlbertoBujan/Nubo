@@ -32,6 +32,10 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -103,6 +107,8 @@ fun WeatherScreen(
         }
     }
 
+    val pullState = rememberPullToRefreshState()
+
     val gradient by remember(state) {
         derivedStateOf {
             interpolatedGradient(
@@ -156,13 +162,36 @@ fun WeatherScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                HorizontalPager(
-                    state = pagerState,
+                // Tirar hacia abajo recarga **todas** las ciudades, no solo la
+                // visible, que es lo que hacía la app Flutter: el gesto es el
+                // mismo que el botón de la barra superior, y ambos se apagan
+                // con el mismo `isRefreshing`.
+                PullToRefreshBox(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = onRefreshAll,
+                    state = pullState,
                     modifier = Modifier.fillMaxSize(),
-                ) { page ->
-                    val city = state.cityAt(page)
-                    if (city != null) {
-                        CityPage(city = city, onRetry = { onRetry(city.municipioId) })
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            modifier = Modifier.align(Alignment.TopCenter),
+                            isRefreshing = state.isRefreshing,
+                            state = pullState,
+                            // Los colores por defecto salen del esquema de
+                            // Material y sobre el gradiente del cielo quedan
+                            // desvaídos; estos son los que ya usaba Flutter.
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            color = Color.White,
+                        )
+                    },
+                ) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                    ) { page ->
+                        val city = state.cityAt(page)
+                        if (city != null) {
+                            CityPage(city = city, onRetry = { onRetry(city.municipioId) })
+                        }
                     }
                 }
             }
@@ -298,6 +327,15 @@ private fun CityPage(city: CityWeather, onRetry: () -> Unit) {
     }
 }
 
+/**
+ * Margen lateral común a todas las tarjetas de la página.
+ *
+ * Iba suelto en cada llamada y había derivado a dos valores distintos, con lo
+ * que los avisos sobresalían cuatro puntos por cada lado respecto a las horas
+ * y al sol. Una constante evita que se vuelva a separar.
+ */
+private val CARD_MARGIN = 20.dp
+
 @Composable
 private fun CityContent(city: CityWeather) {
     val (max, min) = city.todayRange
@@ -344,14 +382,14 @@ private fun CityContent(city: CityWeather) {
         Spacer(Modifier.height(16.dp))
 
         if (city.alerts.isNotEmpty()) {
-            AlertBox(city.alerts, Modifier.padding(horizontal = 16.dp))
+            AlertBox(city.alerts, Modifier.padding(horizontal = CARD_MARGIN))
             Spacer(Modifier.height(8.dp))
         }
 
         HourlyView(
             forecasts = city.hourly,
             alerts = city.alerts,
-            modifier = Modifier.padding(horizontal = 20.dp),
+            modifier = Modifier.padding(horizontal = CARD_MARGIN),
         )
 
         Spacer(Modifier.height(16.dp))
@@ -359,7 +397,7 @@ private fun CityContent(city: CityWeather) {
         DailyView(
             forecasts = city.daily,
             alerts = city.alerts,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = CARD_MARGIN),
         )
 
         Spacer(Modifier.height(12.dp))
@@ -367,7 +405,7 @@ private fun CityContent(city: CityWeather) {
         SunMoonCard(
             sunTimes = city.sunTimes,
             moonData = city.moonData,
-            modifier = Modifier.padding(horizontal = 20.dp),
+            modifier = Modifier.padding(horizontal = CARD_MARGIN),
         )
     }
 }

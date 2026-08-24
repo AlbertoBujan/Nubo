@@ -59,6 +59,9 @@ enum class WeatherCodeGroup(
     /** Familias en las que cae agua, y que por tanto pintan gotas en el fondo. */
     val hasRain: Boolean get() = this == DRIZZLE || this == RAIN || this == THUNDER
 
+    /** Familias en las que caen copos, que se pintan de otra manera. */
+    val hasSnow: Boolean get() = this == SNOW
+
     /** Familias que además pintan destellos de rayo. */
     val hasThunder: Boolean get() = this == THUNDER
 

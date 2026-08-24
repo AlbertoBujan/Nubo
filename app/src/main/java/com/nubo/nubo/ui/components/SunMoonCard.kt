@@ -21,11 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -153,28 +152,36 @@ private fun ArcCard(
 }
 
 /**
- * Semicírculo con el trayecto recorrido resaltado y un punto en la posición
- * actual, al estilo de Breezy Weather.
+ * Trayectoria del astro con el tramo recorrido resaltado y un punto en la
+ * posición actual, al estilo de Breezy Weather.
+ *
+ * Es una parábola, no un semicírculo. El arco de circunferencia sale de los
+ * extremos en vertical y engorda por los lados, que es lo que hacía que
+ * pareciese un puente en vez de la trayectoria de un astro; la Bézier
+ * cuadrática arranca inclinada y concentra la curvatura en el mediodía.
  */
 @Composable
 private fun Arc(progress: Float, color: Color, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val stroke = 2.5.dp.toPx()
-        val radius = minOf(size.width / 2, size.height) - stroke
-        val center = Offset(size.width / 2, size.height)
-        val rect = Rect(
-            offset = Offset(center.x - radius, center.y - radius),
-            size = Size(radius * 2, radius * 2),
-        )
+        val baseline = size.height - stroke
+        val start = Offset(stroke, baseline)
+        val end = Offset(size.width - stroke, baseline)
+
+        // En una Bézier cuadrática la curva pasa por la mitad de la altura del
+        // punto de control, así que se dobla para que la cima llegue arriba.
+        val apex = baseline - stroke
+        val control = Offset(size.width / 2, baseline - apex * 2)
+
+        val path = Path().apply {
+            moveTo(start.x, start.y)
+            quadraticTo(control.x, control.y, end.x, end.y)
+        }
 
         // Trayecto completo, punteado y tenue.
-        drawArc(
+        drawPath(
+            path = path,
             color = color.copy(alpha = 0.28f),
-            startAngle = 180f,
-            sweepAngle = 180f,
-            useCenter = false,
-            topLeft = rect.topLeft,
-            size = rect.size,
             style = Stroke(
                 width = stroke,
                 cap = StrokeCap.Round,
@@ -184,24 +191,23 @@ private fun Arc(progress: Float, color: Color, modifier: Modifier = Modifier) {
 
         if (progress <= 0f) return@Canvas
 
-        // Tramo ya recorrido.
-        drawArc(
+        // Se recorre por distancia, no por el parámetro de la Bézier: el
+        // parámetro avanza más deprisa en los extremos y el punto se
+        // adelantaría respecto a la hora real.
+        val measure = PathMeasure().apply { setPath(path, false) }
+        val travelled = measure.length * progress.coerceIn(0f, 1f)
+
+        val done = Path()
+        measure.getSegment(0f, travelled, done, true)
+        drawPath(
+            path = done,
             color = color,
-            startAngle = 180f,
-            sweepAngle = 180f * progress.coerceIn(0f, 1f),
-            useCenter = false,
-            topLeft = rect.topLeft,
-            size = rect.size,
             style = Stroke(width = stroke, cap = StrokeCap.Round),
         )
 
         if (progress >= 1f) return@Canvas
 
-        val angle = Math.toRadians((180f + 180f * progress).toDouble())
-        val position = Offset(
-            center.x + radius * kotlin.math.cos(angle).toFloat(),
-            center.y + radius * kotlin.math.sin(angle).toFloat(),
-        )
+        val position = measure.getPosition(travelled)
         drawCircle(color, 4.dp.toPx(), position)
         drawCircle(Color.White, 1.5.dp.toPx(), position)
     }

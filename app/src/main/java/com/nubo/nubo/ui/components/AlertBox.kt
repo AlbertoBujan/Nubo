@@ -138,21 +138,12 @@ private fun AlertDetail(alert: WeatherAlert) {
             .background(Color.Black.copy(alpha = 0.18f))
             .padding(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Outlined.Warning,
-                null,
-                tint = alert.level.toColor(),
-                modifier = Modifier.size(10.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                alert.areaDescription,
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.W600,
-            )
-        }
+        Text(
+            alert.areaDescription,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.W600,
+        )
 
         if (alert.onset != null || alert.expires != null) {
             Spacer(Modifier.height(4.dp))

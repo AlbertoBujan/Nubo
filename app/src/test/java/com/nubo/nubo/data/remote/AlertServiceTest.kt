@@ -8,15 +8,19 @@ import java.time.LocalDateTime
 /**
  * Cubre el parseo de los avisos CAP tal y como los sirve AEMET: varios
  * `<alert>` concatenados en un mismo cuerpo, en varios idiomas y para toda una
- * comunidad autónoma, de donde hay que quedarse solo con lo de una provincia.
+ * comunidad autónoma, de donde hay que quedarse solo con lo de una zona.
  */
 class AlertServiceTest {
 
     private val service = AlertService()
 
-    /** A Coruña: provincia 15, área 71 (Galicia) → prefijo de geocode "7115". */
-    private val provincia = "15"
-    private val area = "71"
+    /**
+     * Interior de A Coruña, la zona de Curtis.
+     *
+     * Galicia (71) + A Coruña (15) + zona 03. La provincia tiene otras tres
+     * zonas —01 Noroeste, 02 Oeste y 04 Suroeste— que son costeras.
+     */
+    private val zona = "711503"
 
     private val futuro = LocalDateTime.now().plusDays(1).toString() + "+02:00"
     private val pasado = LocalDateTime.now().minusDays(2).toString() + "+02:00"
@@ -51,10 +55,10 @@ class AlertServiceTest {
 
     @Test
     fun `extrae varios avisos concatenados en un mismo cuerpo`() {
-        val body = alertXml("711501", "amarillo", event = "Lluvias") +
-            alertXml("711502", "naranja", event = "Costeros")
+        val body = alertXml(zona, "amarillo", event = "Lluvias") +
+            alertXml(zona, "naranja", event = "Tormentas")
 
-        val alerts = service.parseCapAlerts(body, provincia, area)
+        val alerts = service.parseCapAlerts(body, zona)
 
         assertEquals(2, alerts.size)
         assertEquals("amarillo", alerts[0].nivel)
@@ -64,9 +68,9 @@ class AlertServiceTest {
     @Test
     fun `descarta los avisos de otra provincia de la misma comunidad`() {
         // 7115 = A Coruña, 7127 = Lugo. Ambas están en el área 71.
-        val body = alertXml("711501", "amarillo") + alertXml("712701", "rojo")
+        val body = alertXml(zona, "amarillo") + alertXml("712701", "rojo")
 
-        val alerts = service.parseCapAlerts(body, provincia, area)
+        val alerts = service.parseCapAlerts(body, zona)
 
         assertEquals(1, alerts.size)
         assertEquals("amarillo", alerts[0].nivel)
@@ -74,17 +78,17 @@ class AlertServiceTest {
 
     @Test
     fun `ignora el nivel verde porque significa que no hay aviso`() {
-        val body = alertXml("711501", "verde")
+        val body = alertXml(zona, "verde")
 
-        assertTrue(service.parseCapAlerts(body, provincia, area).isEmpty())
+        assertTrue(service.parseCapAlerts(body, zona).isEmpty())
     }
 
     @Test
     fun `se queda solo con la version en español`() {
-        val body = alertXml("711501", "amarillo", event = "Rain", language = "en-GB") +
-            alertXml("711501", "amarillo", event = "Lluvias", language = "es-ES")
+        val body = alertXml(zona, "amarillo", event = "Rain", language = "en-GB") +
+            alertXml(zona, "amarillo", event = "Lluvias", language = "es-ES")
 
-        val alerts = service.parseCapAlerts(body, provincia, area)
+        val alerts = service.parseCapAlerts(body, zona)
 
         assertEquals(1, alerts.size)
         assertEquals("Lluvias", alerts[0].event)
@@ -92,14 +96,14 @@ class AlertServiceTest {
 
     @Test
     fun `descarta los avisos ya caducados`() {
-        val body = alertXml("711501", "amarillo", expires = pasado)
+        val body = alertXml(zona, "amarillo", expires = pasado)
 
-        assertTrue(service.parseCapAlerts(body, provincia, area).isEmpty())
+        assertTrue(service.parseCapAlerts(body, zona).isEmpty())
     }
 
     @Test
     fun `lee nivel, probabilidad, zona y textos`() {
-        val alerts = service.parseCapAlerts(alertXml("711501", "naranja"), provincia, area)
+        val alerts = service.parseCapAlerts(alertXml(zona, "naranja"), zona)
 
         assertEquals(1, alerts.size)
         val alert = alerts[0]
@@ -115,9 +119,9 @@ class AlertServiceTest {
     @Test
     fun `un bloque corrupto no invalida los demas`() {
         val body = "<alert><info><language>es</language>SIN CERRAR" +
-            alertXml("711501", "amarillo")
+            alertXml(zona, "amarillo")
 
-        val alerts = service.parseCapAlerts(body, provincia, area)
+        val alerts = service.parseCapAlerts(body, zona)
 
         assertEquals(1, alerts.size)
         assertEquals("amarillo", alerts[0].nivel)
@@ -125,22 +129,30 @@ class AlertServiceTest {
 
     @Test
     fun `un cuerpo vacio o sin avisos devuelve lista vacia`() {
-        assertTrue(service.parseCapAlerts("", provincia, area).isEmpty())
-        assertTrue(service.parseCapAlerts("no es xml", provincia, area).isEmpty())
+        assertTrue(service.parseCapAlerts("", zona).isEmpty())
+        assertTrue(service.parseCapAlerts("no es xml", zona).isEmpty())
     }
 
     @Test
-    fun `la tabla de areas cubre las 52 provincias`() {
-        assertEquals(52, AemetAreas.provinciaToArea.size)
-        assertEquals("72", AemetAreas.areaForMunicipio("28079")) // Madrid
-        assertEquals("71", AemetAreas.areaForMunicipio("15030")) // A Coruña
-        assertEquals("65", AemetAreas.areaForMunicipio("35016")) // Las Palmas
-        assertEquals("15", AemetAreas.provinciaOf("15030"))
+    fun `descarta los avisos de otra zona de la misma provincia`() {
+        // El fallo que arrastraba la app: filtrando por el prefijo "7115"
+        // entraban las cuatro zonas de A Coruña, así que a Curtis —interior—
+        // le llegaban los avisos costeros del Noroeste y del Oeste.
+        val body = alertXml("711501", "rojo", event = "Costeros") +
+            alertXml("711502", "naranja", event = "Costeros") +
+            alertXml(zona, "amarillo", event = "Lluvias") +
+            alertXml("711504", "rojo", event = "Costeros")
+
+        val alerts = service.parseCapAlerts(body, zona)
+
+        assertEquals(1, alerts.size)
+        assertEquals("Lluvias", alerts[0].event)
+        assertEquals("amarillo", alerts[0].nivel)
     }
 
     @Test
-    fun `un municipio con codigo invalido no tiene area`() {
-        assertEquals(null, AemetAreas.areaForMunicipio("9"))
-        assertEquals(null, AemetAreas.areaForMunicipio("99999"))
+    fun `no confunde una zona con otra que empiece igual`() {
+        // Igualdad, no prefijo: "7115" ya no debe casar con "711503".
+        assertTrue(service.parseCapAlerts(alertXml(zona, "amarillo"), "7115").isEmpty())
     }
 }

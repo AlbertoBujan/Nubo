@@ -65,9 +65,17 @@ class WeatherEffectTest {
     }
 
     @Test
-    fun `la nieve no cae como lluvia`() {
-        assertEquals(WeatherEffect.NONE, WeatherEffect.fromSkyCode("73"))
-        assertEquals(WeatherEffect.NONE, WeatherEffect.fromSkyCode("86"))
+    fun `la nieve cae como nieve, no como lluvia`() {
+        assertEquals(WeatherEffect.SNOW, WeatherEffect.fromSkyCode("73"))
+        assertEquals(WeatherEffect.SNOW, WeatherEffect.fromSkyCode("86"))
+        assertEquals(WeatherEffect.SNOW, WeatherEffect.fromSkyCode("77"))
+
+        // Un copo es un punto que se balancea: ni deja estela ni cae al ritmo
+        // de una gota, y esas dos cosas son las que lo diferencian.
+        assertTrue(WeatherEffect.SNOW.isSnow)
+        assertEquals(0f, WeatherEffect.SNOW.dropLength, 0f)
+        assertTrue(WeatherEffect.SNOW.speed < WeatherEffect.DRIZZLE.speed)
+        assertTrue(!WeatherEffect.SNOW.hasFlashes)
     }
 
     @Test

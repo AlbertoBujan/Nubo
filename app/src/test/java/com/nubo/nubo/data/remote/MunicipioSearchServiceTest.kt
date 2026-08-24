@@ -19,11 +19,11 @@ class MunicipioSearchServiceTest {
     private val maestro = JSONArray(
         """
         [
-          {"id":"id28079","nombre":"Madrid","latitud_dec":"40,4165","longitud_dec":"-3,7026"},
-          {"id":"id35016","nombre":"Palmas de Gran Canaria, Las","latitud_dec":"28,1248","longitud_dec":"-15,4300"},
-          {"id":"id15030","nombre":"Coruña, A","latitud_dec":"43,3713","longitud_dec":"-8,3960"},
-          {"id":"id46250","nombre":"Valencia (Comunitat Valenciana)","latitud_dec":"39,4699","longitud_dec":"-0,3763"},
-          {"id":"id07040","nombre":"Sin coordenadas"}
+          {"id":"id28079","nombre":"Madrid","latitud_dec":"40,4165","longitud_dec":"-3,7026","zona_comarcal":"722801"},
+          {"id":"id35016","nombre":"Palmas de Gran Canaria, Las","latitud_dec":"28,1248","longitud_dec":"-15,4300","zona_comarcal":"659001"},
+          {"id":"id15030","nombre":"Coruña, A","latitud_dec":"43,3713","longitud_dec":"-8,3960","zona_comarcal":"711501"},
+          {"id":"id46250","nombre":"Valencia (Comunitat Valenciana)","latitud_dec":"39,4699","longitud_dec":"-0,3763","zona_comarcal":""},
+          {"id":"id07040","nombre":"Sin coordenadas","zona_comarcal":"64"}
         ]
         """.trimIndent(),
     )
@@ -76,5 +76,33 @@ class MunicipioSearchServiceTest {
         assertEquals("a coruna", MunicipioSearchService.normalize("A Coruña"))
         assertEquals("alcaniz", MunicipioSearchService.normalize("Alcañiz"))
         assertEquals("aviles", MunicipioSearchService.normalize("Avilés"))
+    }
+
+    @Test
+    fun `lee la zona de aviso del maestro`() {
+        val zonas = parsed().associate { it.id to it.zonaAviso }
+
+        assertEquals("722801", zonas["28079"])
+        assertEquals("711501", zonas["15030"])
+    }
+
+    @Test
+    fun `en Canarias la zona no lleva los digitos de provincia del INE`() {
+        // Las Palmas es la provincia 35, pero su zona es 6590xx: por eso
+        // filtrar los avisos por el prefijo de provincia nunca funcionó allí.
+        val laspalmas = parsed().first { it.id == "35016" }
+
+        assertEquals("659001", laspalmas.zonaAviso)
+        assertTrue(!laspalmas.zonaAviso!!.startsWith("6535"))
+    }
+
+    @Test
+    fun `una zona ausente o mal formada se descarta`() {
+        // Sin zona el municipio se queda sin avisos, que es preferible a
+        // colarle los de otra: ver `AlertService`.
+        val zonas = parsed().associate { it.id to it.zonaAviso }
+
+        assertNull(zonas["46250"])
+        assertNull(zonas["07040"])
     }
 }

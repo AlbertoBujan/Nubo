@@ -59,7 +59,12 @@ object ServiceLocator {
         api = openMeteoApi,
     )
 
-    fun alertRepository(): AlertRepository = AlertRepositoryImpl(AlertService(aemetApi))
+    // Necesita el repositorio de ubicaciones para resolver la zona de aviso
+    // del municipio, y ese sí depende del contexto.
+    fun alertRepository(context: Context): AlertRepository = AlertRepositoryImpl(
+        locationRepository = locationRepository(context),
+        alertService = AlertService(aemetApi),
+    )
 
     fun updateService(context: Context): UpdateService =
         UpdateService(context.applicationContext, http)
@@ -72,7 +77,7 @@ object ServiceLocator {
                 val appContext = context.applicationContext
                 return WeatherViewModel(
                     weatherRepository = weatherRepository(appContext),
-                    alertRepository = alertRepository(),
+                    alertRepository = alertRepository(appContext),
                     locationRepository = locationRepository(appContext),
                     storage = weatherStorage(appContext),
                 ) as T

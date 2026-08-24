@@ -36,7 +36,7 @@ class BackgroundUpdateWorker(
         }
 
         val weatherRepository = ServiceLocator.weatherRepository(applicationContext)
-        val alertRepository = ServiceLocator.alertRepository()
+        val alertRepository = ServiceLocator.alertRepository(applicationContext)
 
         var updated = 0
         for (location in locations) {

@@ -16,7 +16,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  *    atraganta con eso porque no hay un único elemento raíz, así que primero se
  *    trocea por expresión regular y luego se parsea cada bloque por separado.
  * 2. Los avisos se piden por área (comunidad autónoma), así que hay que filtrar
- *    después por provincia mirando el `geocode` de cada zona.
+ *    después mirando el `geocode` de cada zona.
  */
 class AlertService(
     private val aemet: AemetApi = AemetApi(),
@@ -28,9 +28,14 @@ class AlertService(
      * Nunca lanza: si AEMET falla, devuelve lista vacía. Quedarse sin avisos es
      * preferible a que la pantalla del tiempo no cargue.
      */
-    suspend fun fetchAlerts(municipioId: String): List<WeatherAlert> {
-        val provincia = AemetAreas.provinciaOf(municipioId) ?: return emptyList()
-        val area = AemetAreas.areaForMunicipio(municipioId) ?: return emptyList()
+    suspend fun fetchAlerts(zonaAviso: String): List<WeatherAlert> {
+        // Sin zona no se puede filtrar, y devolver los de toda la comunidad
+        // sería peor que no devolver ninguno.
+        if (!ZONA_AVISO.matches(zonaAviso)) return emptyList()
+
+        // Los dos primeros dígitos de la zona son el área por la que pregunta
+        // el servicio, así que no hace falta ninguna tabla aparte.
+        val area = zonaAviso.take(2)
 
         return try {
             val body = aemet.fetchData(
@@ -38,7 +43,7 @@ class AlertService(
                 timeoutSeconds = TIMEOUT_SECONDS,
             ) ?: return emptyList()
 
-            parseCapAlerts(body, provincia, area)
+            parseCapAlerts(body, zonaAviso)
         } catch (_: Exception) {
             emptyList()
         }
@@ -47,26 +52,18 @@ class AlertService(
     /**
      * Extrae los avisos de un cuerpo con uno o más bloques `<alert>`.
      *
-     * Solo conserva los que afectan a [provincia], están en español y no son
-     * de nivel verde (que en el CAP de AEMET significa "sin aviso").
+     * Solo conserva los de [zonaAviso], en español y de nivel distinto de
+     * verde (que en el CAP de AEMET significa "sin aviso").
      */
-    internal fun parseCapAlerts(
-        rawContent: String,
-        provincia: String,
-        area: String,
-    ): List<WeatherAlert> {
+    internal fun parseCapAlerts(rawContent: String, zonaAviso: String): List<WeatherAlert> {
         val alerts = mutableListOf<WeatherAlert>()
-
-        // El geocode de una zona empieza por {área}{provincia}.
-        // Ej.: Galicia = 71 y A Coruña = 15 → "7115".
-        val geocodePrefix = "$area$provincia"
 
         for (match in ALERT_BLOCK.findAll(rawContent)) {
             // Un bloque ilegible no debe invalidar los demás: se descarta y
             // se sigue con el siguiente.
             val parsed = runCatching {
                 val xml = """<?xml version="1.0" encoding="UTF-8"?>${match.value}"""
-                parseAlertBlock(xml, geocodePrefix)
+                parseAlertBlock(xml, zonaAviso)
             }.getOrNull() ?: continue
 
             alerts.addAll(parsed)
@@ -75,7 +72,7 @@ class AlertService(
         return alerts
     }
 
-    private fun parseAlertBlock(xml: String, geocodePrefix: String): List<WeatherAlert>? {
+    private fun parseAlertBlock(xml: String, zonaAviso: String): List<WeatherAlert>? {
         val factory = DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = false
             // El payload viene de un tercero: se cierran las entidades externas.
@@ -97,14 +94,14 @@ class AlertService(
             val language = info.childText("language") ?: ""
             if (!language.startsWith("es")) continue
 
-            parseInfoElement(info, geocodePrefix)?.let { result += it }
+            parseInfoElement(info, zonaAviso)?.let { result += it }
         }
 
         return result.ifEmpty { null }
     }
 
-    private fun parseInfoElement(info: Element, geocodePrefix: String): WeatherAlert? {
-        if (!matchesProvincia(info, geocodePrefix)) return null
+    private fun parseInfoElement(info: Element, zonaAviso: String): WeatherAlert? {
+        if (!matchesZona(info, zonaAviso)) return null
 
         // El nivel y la probabilidad viajan como <parameter> con nombre libre.
         var nivel = ""
@@ -138,13 +135,19 @@ class AlertService(
         return alert.takeIf { it.isActiveOrUpcoming }
     }
 
-    /** Comprueba si alguna zona del aviso cae en la provincia buscada. */
-    private fun matchesProvincia(info: Element, geocodePrefix: String): Boolean {
+    /**
+     * Comprueba si el aviso cubre exactamente la zona del municipio.
+     *
+     * La comparación es de igualdad, no de prefijo. Filtrando por los cuatro
+     * primeros dígitos —área y provincia— entraban los avisos de **todas** las
+     * zonas de la provincia: A Coruña tiene cuatro, y a un municipio del
+     * interior le llegaban los avisos costeros de las otras tres.
+     */
+    private fun matchesZona(info: Element, zonaAviso: String): Boolean {
         var matches = false
         info.eachChild("area") { area ->
             area.eachChild("geocode") { geocode ->
-                val value = geocode.childText("value").orEmpty()
-                if (value.startsWith(geocodePrefix)) matches = true
+                if (geocode.childText("value") == zonaAviso) matches = true
             }
         }
         return matches
@@ -152,6 +155,9 @@ class AlertService(
 
     private companion object {
         const val TIMEOUT_SECONDS = 10L
+
+        /** Área (2) + provincia (2) + zona (2). */
+        val ZONA_AVISO = Regex("""\d{6}""")
 
         /**
          * Cada aviso completo.

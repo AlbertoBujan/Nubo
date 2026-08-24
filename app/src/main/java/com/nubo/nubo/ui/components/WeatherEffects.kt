@@ -15,13 +15,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import com.nubo.nubo.domain.weather.WeatherCodeGroup
+import kotlin.math.PI
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.random.Random
 
 /** Intensidad del efecto que se pinta sobre el fondo. */
 enum class WeatherEffect(
     val dropCount: Int,
-    /** Alturas de pantalla que recorre una gota por segundo. */
+    /** Alturas de pantalla que recorre una partícula por segundo. */
     val speed: Float,
     /** Largo de la gota como fracción de la altura de pantalla. */
     val dropLength: Float,
@@ -32,9 +34,16 @@ enum class WeatherEffect(
     RAIN(55, 0.95f, 0.032f, 0.34f),
     HEAVY_RAIN(80, 1.35f, 0.05f, 0.42f),
     THUNDER(80, 1.35f, 0.05f, 0.42f),
+
+    // La nieve cae a una fracción de la velocidad de la lluvia y no deja
+    // estela, así que `dropLength` no la usa: el copo es un punto.
+    SNOW(70, 0.12f, 0f, 0.72f),
     ;
 
     val hasFlashes: Boolean get() = this == THUNDER
+
+    /** Si las partículas son copos y no gotas, que se dibujan distinto. */
+    val isSnow: Boolean get() = this == SNOW
 
     companion object {
         /** Códigos de lluvia intensa o chubasco fuerte. */
@@ -43,6 +52,7 @@ enum class WeatherEffect(
         /** Deriva el efecto del código WMO del cielo. */
         fun fromSkyCode(code: String?): WeatherEffect {
             val group = WeatherCodeGroup.fromCode(code)
+            if (group.hasSnow) return SNOW
             if (!group.hasRain) return NONE
             if (group.hasThunder) return THUNDER
             if (group == WeatherCodeGroup.DRIZZLE) return DRIZZLE
@@ -64,7 +74,7 @@ private data class Drop(
 )
 
 /**
- * Lluvia y relámpagos sobre el fondo del cielo.
+ * Lluvia, nieve y relámpagos sobre el fondo del cielo.
  *
  * Sigue el planteamiento de Breezy Weather: partículas dibujadas a mano sobre
  * un canvas en vez de una animación empaquetada, para poder ajustar densidad y
@@ -148,12 +158,27 @@ fun WeatherEffectsOverlay(
         for (drop in drops) {
             // Recorrido normalizado que se repite: función pura del tiempo.
             val travel = (drop.phase + elapsed * effect.speed * drop.depth) % 1f
+            val alpha = effect.opacity * drop.depth * intensity
+
+            if (effect.isSnow) {
+                // El copo no cae recto: se balancea. Sin ese vaivén los puntos
+                // bajan en columnas y se leen como una cortina de lluvia lenta,
+                // no como nieve.
+                val sway = sin(travel * SWAY_TURNS + drop.phase * TWO_PI) * SWAY_WIDTH
+                drawCircle(
+                    color = Color.White.copy(alpha = alpha),
+                    radius = (1.1f + drop.depth * 2.1f) * density,
+                    center = Offset((drop.x + sway) * size.width, travel * size.height),
+                )
+                continue
+            }
+
             val startX = (drop.x + drop.drift * travel) * size.width
             val startY = travel * size.height
             val length = effect.dropLength * drop.depth * size.height
 
             drawLine(
-                color = Color.White.copy(alpha = effect.opacity * drop.depth * intensity),
+                color = Color.White.copy(alpha = alpha),
                 start = Offset(startX, startY),
                 end = Offset(startX + drop.drift * size.width * 0.12f, startY + length),
                 strokeWidth = 1f + drop.depth * 0.8f,
@@ -183,6 +208,14 @@ private fun flashAlphaAt(elapsed: Float, flashes: List<Float>): Float {
     }
     return 0f
 }
+
+private const val TWO_PI = 2f * PI.toFloat()
+
+/** Vaivenes completos que da un copo en toda su caída. */
+private const val SWAY_TURNS = 3f * TWO_PI
+
+/** Amplitud del vaivén, en fracción del ancho de pantalla. */
+private const val SWAY_WIDTH = 0.02f
 
 /** Periodo del ciclo del ticker; los destellos se reparten dentro. */
 private const val CYCLE_SECONDS = 60f

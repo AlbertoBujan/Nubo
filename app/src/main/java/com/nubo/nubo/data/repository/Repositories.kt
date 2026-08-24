@@ -28,6 +28,9 @@ class WeatherRepositoryException(message: String) : Exception(message)
 
 interface LocationRepository {
     suspend fun getCoordinates(municipioId: String): Coordinates?
+
+    /** Zona de aviso de AEMET del municipio; ver `MunicipioSearchService`. */
+    suspend fun getZonaAviso(municipioId: String): String?
     suspend fun findNearest(lat: Double, lon: Double): SavedLocation?
     suspend fun searchByName(query: String): List<SavedLocation>
     suspend fun getCurrentPosition(): Coordinates
@@ -39,6 +42,9 @@ class LocationRepositoryImpl(
 ) : LocationRepository {
     override suspend fun getCoordinates(municipioId: String) =
         searchService.getCoordinates(municipioId)
+
+    override suspend fun getZonaAviso(municipioId: String) =
+        searchService.getZonaAviso(municipioId)
 
     override suspend fun findNearest(lat: Double, lon: Double) =
         searchService.findNearestMunicipio(lat, lon)
@@ -80,8 +86,18 @@ interface AlertRepository {
     suspend fun getAlerts(municipioId: String): List<WeatherAlert>
 }
 
+/**
+ * Resuelve la zona de aviso del municipio antes de pedir los avisos.
+ *
+ * La zona sale del maestro de municipios, que ya se descarga para el buscador,
+ * de ahí la dependencia del repositorio de ubicaciones.
+ */
 class AlertRepositoryImpl(
+    private val locationRepository: LocationRepository,
     private val alertService: AlertService = AlertService(),
 ) : AlertRepository {
-    override suspend fun getAlerts(municipioId: String) = alertService.fetchAlerts(municipioId)
+    override suspend fun getAlerts(municipioId: String): List<WeatherAlert> {
+        val zona = locationRepository.getZonaAviso(municipioId) ?: return emptyList()
+        return alertService.fetchAlerts(zona)
+    }
 }
