@@ -29,8 +29,11 @@ android {
         // `pubspec.yaml` nunca llevó `+buildNumber`. A partir de aquí el número
         // sube en cada release, que es lo que Android espera de una
         // actualización.
-        versionCode = 2
-        versionName = "0.2.0"
+        //
+        // 1.0.0 es la primera versión nativa en Kotlin, sucesora de la 0.1.36
+        // en Flutter.
+        versionCode = 3
+        versionName = "1.0.0"
     }
 
     signingConfigs {
