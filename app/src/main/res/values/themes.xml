@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- La app pinta su propio fondo (gradiente dinámico según el ciclo solar),
+         así que el tema base solo necesita no estorbar: sin ActionBar y con la
+         ventana en el azul oscuro de Nubo para que el arranque no dé un
+         destello blanco antes de que Compose tome el control. -->
+    <style name="Theme.Nubo" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/nubo_window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+    </style>
+
+</resources>

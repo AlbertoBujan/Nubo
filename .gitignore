@@ -119,3 +119,10 @@ app.*.symbols
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
+# --- Proyecto Android nativo (port a Kotlin) ---
+# Tras la migración el proyecto vive en la raíz, no bajo android/,
+# así que las reglas de arriba con prefijo **/android/ ya no lo cubren.
+/local.properties
+/key.properties
+/.kotlin/
+*.keystore

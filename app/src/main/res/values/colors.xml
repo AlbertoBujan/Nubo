@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mismo valor que el scaffoldBackgroundColor de la app Flutter. -->
+    <color name="nubo_window_background">#1A1A2E</color>
+</resources>
