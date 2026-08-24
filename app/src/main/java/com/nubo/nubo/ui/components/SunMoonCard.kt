@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,6 +30,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nubo.nubo.domain.astro.MoonData
@@ -52,10 +55,15 @@ fun SunMoonCard(
 ) {
     if (sunTimes == null) return
 
-    val formatter = DateTimeFormatter.ofPattern("HH:mm")
+    val formatter = DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.forLanguageTag("es-ES"))
 
+    // IntrinsicSize.Min mide la más alta y estira la otra hasta igualarla, de
+    // modo que las dos tarjetas quedan siempre simétricas aunque el nombre de
+    // la fase lunar ocupe más que el título "Sol".
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ArcCard(
@@ -67,7 +75,9 @@ fun SunMoonCard(
             startLabel = sunTimes.sunrise.format(formatter),
             endLabel = sunTimes.sunset.format(formatter),
             arcColor = Color(0xFFFFB300),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
         )
 
         if (moonData?.moonrise != null && moonData.moonset != null) {
@@ -80,8 +90,9 @@ fun SunMoonCard(
                 startLabel = moonData.moonrise.format(formatter),
                 endLabel = moonData.moonset.format(formatter),
                 arcColor = Color(0xFF90A4AE),
-                footer = "${(moonData.illumination * 100).toInt()}% iluminada",
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
             )
         } else {
             Spacer(Modifier.weight(1f))
@@ -100,7 +111,6 @@ private fun ArcCard(
     endLabel: String,
     arcColor: Color,
     modifier: Modifier = Modifier,
-    footer: String? = null,
 ) {
     val progress = progressBetween(start, end)
 
@@ -114,6 +124,8 @@ private fun ArcCard(
                     color = Color.White,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.W600,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
 
@@ -135,11 +147,6 @@ private fun ArcCard(
             ) {
                 Text(startLabel, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
                 Text(endLabel, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
-            }
-
-            if (footer != null) {
-                Spacer(Modifier.height(4.dp))
-                Text(footer, color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
             }
         }
     }

@@ -50,6 +50,10 @@ private val CHART_HEIGHT = 110.dp
 
 private val DEW_COLOR = Color(0xFF80DEEA)
 
+private val SPANISH: java.util.Locale = java.util.Locale.forLanguageTag("es-ES")
+private val SHORT_DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE", SPANISH)
+private val HOUR: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", SPANISH)
+
 /** Carrusel horario con el gráfico de temperaturas debajo. */
 @Composable
 fun HourlyView(
@@ -125,14 +129,18 @@ private fun HourColumn(
     val dayLabel = when (forecast.dateTime.toLocalDate()) {
         today -> "Hoy"
         today.plusDays(1) -> "Mañana"
-        else -> forecast.dateTime.format(DateTimeFormatter.ofPattern("EEE"))
+        // El locale va explícito: sin él se usa el del dispositivo y los días
+        // salían en inglés ("Wed") en un teléfono configurado en otro idioma.
+        else -> forecast.dateTime.format(SHORT_DAY)
+            .replaceFirstChar { it.uppercase() }
+            .removeSuffix(".")
     }
 
     val activeAlerts = remember(forecast, alerts) {
         val from = forecast.dateTime
         val to = from.plusHours(1)
         alerts.filter { it.overlaps(from, to) }
-            .distinctBy { it.event }
+            .distinctBy { normalizeType(it.event) }
             .sortedByDescending { it.severity }
             .take(2)
     }
@@ -143,7 +151,7 @@ private fun HourColumn(
     ) {
         Text(dayLabel, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
         Text(
-            if (isNow) "Ahora" else forecast.dateTime.format(DateTimeFormatter.ofPattern("HH:mm")),
+            if (isNow) "Ahora" else forecast.dateTime.format(HOUR),
             color = if (isNow) Color.White else Color.White.copy(alpha = 0.85f),
             fontSize = 13.sp,
             fontWeight = if (isNow) FontWeight.W600 else FontWeight.Normal,
@@ -193,10 +201,12 @@ private fun HourColumn(
             Row {
                 activeAlerts.forEach { alert ->
                     Icon(
-                        imageVector = Icons.Outlined.Warning,
+                        // El icono del fenómeno concreto (viento, costeros,
+                        // nieve…) dice mucho más que un triángulo genérico.
+                        imageVector = iconForType(normalizeType(alert.event)),
                         contentDescription = alert.event,
                         tint = alert.level.toColor(),
-                        modifier = Modifier.size(12.dp),
+                        modifier = Modifier.size(13.dp),
                     )
                 }
             }

@@ -1,5 +1,6 @@
 package com.nubo.nubo.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.Icon
@@ -17,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -82,9 +85,23 @@ private fun DailyRow(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 16.dp,
         tint = Color.White.copy(alpha = if (isToday) 0.12f else 0.06f),
-        borderColor = alertColor ?: Color.White.copy(alpha = 0.10f),
+        borderColor = Color.White.copy(alpha = 0.10f),
         contentPadding = 0.dp,
     ) {
+        // El aviso se marca con un punto en la esquina y no tiñendo el borde:
+        // el borde de color competía con el resto de la fila y ensuciaba la
+        // lectura de la lista completa.
+        if (alertColor != null) {
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 12.dp, top = 6.dp)
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(alertColor),
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()

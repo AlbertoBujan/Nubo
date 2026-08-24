@@ -179,10 +179,6 @@ private fun AlertDetail(alert: WeatherAlert) {
             Text(alert.description, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
         }
 
-        if (alert.instruction.isNotBlank()) {
-            Spacer(Modifier.height(6.dp))
-            Text(alert.instruction, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
-        }
     }
 }
 
@@ -204,7 +200,13 @@ internal fun normalizeType(event: String): String {
     }
 }
 
-private fun iconForType(title: String): ImageVector = when (title) {
+/**
+ * Icono del fenómeno.
+ *
+ * Se comparte con el carrusel horario para que un aviso de viento se vea igual
+ * en la tarjeta desplegable y en la hora concreta a la que afecta.
+ */
+internal fun iconForType(title: String): ImageVector = when (title) {
     "Viento" -> Icons.Outlined.Air
     "Costeros" -> Icons.Outlined.Waves
     "Lluvia" -> Icons.Outlined.WaterDrop
