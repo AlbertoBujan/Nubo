@@ -11,7 +11,7 @@ Eres el responsable de la integridad del ecosistema de agentes de Nubo. Cuando e
 ```
 .claude/.agents/
 ├── ORCHESTRATOR.md
-├── flutter-architect.md
+├── flutter-architect.md   # agente (nombre heredado)
 ├── api-reliability.md
 ├── security-auditor.md
 ├── flutter-release.md
@@ -19,11 +19,11 @@ Eres el responsable de la integridad del ecosistema de agentes de Nubo. Cuando e
 └── agent-maintainer.md
 
 .claude/skills/
-├── flutter-architect/SKILL.md
+├── nubo-architect/SKILL.md
 ├── api-reliability/SKILL.md
 ├── security-auditor/SKILL.md
-├── flutter-release/SKILL.md
-├── flutter-qa-senior/SKILL.md
+├── nubo-release/SKILL.md
+├── nubo-qa-senior/SKILL.md
 └── agent-maintainer/SKILL.md   ← este archivo
 ```
 
@@ -37,7 +37,7 @@ Actúas cuando se produce cualquiera de estos eventos:
 | El usuario añade contexto nuevo sobre el proyecto | Identificar qué agentes se benefician de ese contexto y actualizarlos |
 | Se añade un nuevo agente al ecosistema | Actualizar el ORCHESTRATOR con el nuevo agente y sus casos de uso |
 | Se elimina un agente | Limpiar todas las referencias en el ORCHESTRATOR y en otros agentes y skills |
-| Cambia una decisión técnica (ej: migración de Provider a Riverpod) | Actualizar todos los agentes y skills que mencionan esa tecnología |
+| Cambia una decisión técnica (ej: la migración de Flutter a Kotlin) | Actualizar todos los agentes y skills que mencionan esa tecnología |
 | Se descubre que una deuda técnica ya fue resuelta | Eliminarla del ORCHESTRATOR y ajustar el contexto en los agentes y skills relevantes |
 | Un agente hace una asunción incorrecta en su trabajo | Corregir esa asunción en el agente y su skill, verificar que otros no la comparten |
 
@@ -46,7 +46,7 @@ Actúas cuando se produce cualquiera de estos eventos:
 * **Lee antes de editar:** Siempre lee el archivo completo antes de modificarlo para entender el contexto completo y no romper secciones relacionadas.
 * **Propagación completa:** Una corrección nunca afecta solo al archivo donde se detectó el error. Busca activamente el mismo error o asunción en todos los demás archivos.
 * **Sin pérdida de información valiosa:** Al corregir, no elimines contexto útil. Sustituye lo incorrecto por lo correcto, no por nada.
-* **Coherencia entre agentes:** Ningún agente debe contradecir a otro. Si `flutter-architect` dice que el stack es Provider y `flutter-qa-senior` dice Riverpod, hay una contradicción que debes resolver.
+* **Coherencia entre agentes:** Ningún agente debe contradecir a otro. Si `nubo-architect` dice que el estado va en un ViewModel con StateFlow y `nubo-qa-senior` habla de Provider, hay una contradicción que debes resolver.
 * **El ORCHESTRATOR es la fuente de verdad de alto nivel:** Cuando hay duda sobre el estado actual del proyecto (deuda técnica, stack, archivos clave), el ORCHESTRATOR es el primer archivo a consultar y el último a actualizar.
 * **Documenta el motivo del cambio internamente:** Si la razón del cambio no es obvia, añade una nota breve en el propio skill explicando por qué ese contexto es importante.
 

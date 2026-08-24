@@ -13,57 +13,53 @@ jobs:
 
     steps:
       - name: Checkout del código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Install dependencies
-        run: flutter pub get
-
-      # Necesario para el firmado si se usa la keystore
-      - name: Crear key.properties
-        run: |
-          echo "storePassword=${{ secrets.KEY_STORE_PASSWORD }}" > android/key.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
-          echo "keyAlias=${{ secrets.ALIAS }}" >> android/key.properties
-          echo "storeFile=../keystore.jks" >> android/key.properties
+      # La firma se hace dentro de Gradle, no con una acción externa: el
+      # build.gradle.kts lee estas credenciales y produce un APK ya firmado.
+      - name: Preparar credenciales de firma
         env:
-           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-           ALIAS: ${{ secrets.ALIAS }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+        run: |
+          echo "$SIGNING_KEY" | base64 --decode > app/upload-keystore.jks
+          {
+            echo "storePassword=$KEY_STORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$ALIAS"
+            echo "storeFile=app/upload-keystore.jks"
+          } > key.properties
 
-      - name: Compilar APK de Release
-        run: flutter build apk --release --no-shrink
+      - name: Tests unitarios
+        run: ./gradlew testDebugUnitTest
 
-      - name: Firmar el APK
-        uses: ilharp/sign-android-release@v1
-        id: sign_app
+      - name: Compilar APK de release
+        run: ./gradlew assembleRelease
+
+      # Se verifica la firma antes de publicar: un APK firmado con otra clave
+      # no lo aceptarían como actualización las instalaciones existentes.
+      - name: Verificar la firma del APK
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -1)
+          "$APKSIGNER" verify --print-certs \
+            app/build/outputs/apk/release/app-release.apk
+          mv app/build/outputs/apk/release/app-release.apk nubo-release.apk
+
+      - name: Crear release en GitHub
+        uses: softprops/action-gh-release@v3
         with:
-          releaseDir: build/app/outputs/flutter-apk
-          signingKey: ${{ secrets.SIGNING_KEY }}
-          keyAlias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-          buildToolsVersion: '34.0.0'
-
-      - name: Renombrar APK para la Release
-        run: mv ${{ steps.sign_app.outputs.signedFile }} build/app/outputs/flutter-apk/nubo-release.apk
-
-      - name: Crear Release en GitHub
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/app/outputs/flutter-apk/nubo-release.apk
+          files: nubo-release.apk
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           draft: false
@@ -74,10 +70,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Borrar releases antiguas (Mantener últimas 3)
-        uses: dev-drprasad/delete-older-releases@v0.3.4
-        with:
-          keep_latest: 3
-          delete_tags: true
+      # Se hace con el CLI de gh, ya instalado en el runner, en vez de con una
+      # acción de terceros: la que se usaba antes está sin mantenimiento desde
+      # 2024 y seguía en el Node 20 que GitHub va a retirar.
+      - name: Borrar releases antiguas (mantener las 3 últimas)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt \
+            | jq -r 'sort_by(.createdAt) | reverse | .[3:] | .[].tagName' \
+            | while read -r tag; do
+                [ -z "$tag" ] && continue
+                echo "Borrando release antigua: $tag"
+                gh release delete "$tag" --yes --cleanup-tag
+              done

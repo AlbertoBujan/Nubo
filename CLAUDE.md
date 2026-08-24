@@ -4,46 +4,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Nubo is a Flutter (Android-only) weather app. Weather data (current/hourly/daily forecast) comes from Open-Meteo; weather alerts (avisos) come from AEMET's CAP/XML endpoint. State management is `provider` (`ChangeNotifier`), persistence is `shared_preferences`.
+Nubo is an Android-only weather app for Spain, written in Kotlin with Jetpack Compose. Forecast data (current/hourly/daily) comes from Open-Meteo; weather warnings (avisos) come from AEMET's CAP/XML endpoint. State is a single `WeatherViewModel` exposing a `StateFlow`; persistence is DataStore Preferences.
+
+The app was migrated from Flutter in the `kotlin` branch. `main` still holds the Flutter code (last release v0.1.36) and stays deployable until the Kotlin version ships.
 
 ## Commands
 
 ```bash
-flutter pub get                 # install dependencies
-flutter analyze                 # lint (uses flutter_lints via analysis_options.yaml)
-flutter test                    # run all unit/widget tests
-flutter test test/services/api_service_test.dart   # run a single test file
-flutter test --plain-name "some test name"         # run a single test by name
-flutter build apk --release --no-shrink            # release APK (matches CI)
+./gradlew testDebugUnitTest        # unit tests
+./gradlew assembleDebug            # debug APK
+./gradlew assembleRelease          # release APK (signed if key.properties exists)
+./gradlew lintDebug                # Android lint
+./gradlew :app:testDebugUnitTest --tests "*DailyCodeAggregatorTest*"   # single test class
 ```
 
-Integration tests live in `integration_test/` and `test_driver/` and require a connected device/emulator (`adb devices` to check).
+Test results are XML under `app/build/test-results/`; the Gradle console output does not list individual tests.
+
+Requires JDK 17+ (`local.properties` must point `sdk.dir` at the Android SDK).
 
 ### Release / deploy
 
-`deploy.sh` bumps nothing itself — it reads the version already set in `pubspec.yaml`, commits, tags `vX.Y.Z`, and pushes the tag. Pushing the tag triggers `.github/workflows/release.yml`, which builds, signs (secrets: `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_PASSWORD`, `ALIAS`), and publishes a GitHub Release, keeping only the latest 3 releases. So: bump `version:` in `pubspec.yaml` first, then run `./deploy.sh`.
+`deploy.sh` does not bump anything — it reads `versionName` from `app/build.gradle.kts`, runs the tests, commits, tags `vX.Y.Z` and pushes the tag. That triggers `.github/workflows/release.yml`, which builds, signs with the keystore from the `SIGNING_KEY` secret, verifies the signature and publishes a GitHub Release, keeping only the latest 3.
 
-**Always test on an emulator/device before deploying** — do not run `deploy.sh` on unverified changes.
+So: bump `versionName` **and `versionCode`** in `app/build.gradle.kts` first, then run `./deploy.sh`. The script aborts if the tag already exists.
+
+**`versionCode` must increase on every release.** The Flutter app shipped every version with `versionCode = 1` because `pubspec.yaml` never had a build number; Android needs it to go up to accept an update.
+
+**Always test on an emulator/device before deploying.**
 
 ## Architecture
 
-Layered structure under `lib/`: `services/` (raw HTTP/SDK calls) → `repositories/` (abstract interfaces + one `Impl`, own the domain-facing contracts) → `providers/` (single `WeatherProvider`, the app's only `ChangeNotifier`) → `screens/` + `widgets/` (UI, read state via `context.watch`/`Provider.of`).
+Layered under `app/src/main/java/com/nubo/nubo/`:
 
-Repositories are defined as `abstract interface class X` with an `XImpl` that takes its service dependencies as optional constructor params (defaults to `ServiceName()`) — this is the seam used for testing (see `test/repositories/`, which passes fakes/mocks instead of real services). Follow this pattern for any new repository.
+`data/remote` + `data/local` + `data/location` (raw HTTP, DataStore, GPS) → `data/repository` (interfaces + one `Impl`) → `ui/weather/WeatherViewModel` → `ui/weather` screens + `ui/components`.
+
+Pure logic lives in `domain/` and has no Android dependencies, which is what makes it unit-testable without instrumentation.
+
+Dependencies are resolved by hand in `di/ServiceLocator.kt` — no Hilt. One ViewModel and a handful of services do not justify an annotation processor.
 
 Key components:
-- `services/api_service.dart` (`OpenMeteoApiService`) — Open-Meteo forecast fetch, with retry/backoff and timeout in `_getWithRetry`.
-- `services/alert_service.dart` (`AlertService`) — AEMET CAP alerts. Two-step fetch (get a signed data URL, then fetch+parse the XML/tar-concatenated CAP payload with manual regex splitting, since AEMET concatenates multiple `<alert>` blocks in one body). Contains a hardcoded province→AEMET-area code table (`_provinciaToArea`) and API key. `.env` (`AEMET_API_KEY`) exists but is **not** currently wired up (no `flutter_dotenv` dependency) — the key baked into `alert_service.dart` is what's actually used.
-- `services/municipio_search_service.dart` — municipio (Spanish town) name search and nearest-municipio lookup, backing `LocationRepository`.
-- `services/background_update_service.dart` — WorkManager periodic background refresh. `callbackDispatcher` must stay a top-level/`@pragma('vm:entry-point')` function (WorkManager isolate requirement); it re-instantiates repositories directly rather than going through `WeatherProvider`.
-- `services/update_service.dart` — in-app update checker/installer (downloads APK from GitHub Releases via `open_filex`).
-- `repositories/weather_repository.dart` — combines `LocationRepository` (municipio → lat/lon) with `OpenMeteoApiService`, returns `WeatherForecastResult` including the raw JSON (kept raw so `WeatherStorageRepository` can persist it without re-parsing).
-- `repositories/weather_storage_repository.dart` — SharedPreferences-backed cache; stores the *raw* Open-Meteo JSON, alerts, and sun times together under `weather_data_<municipioId>`, and saved locations under `saved_locations`.
-- `providers/weather_provider.dart` — the central state holder. Keeps per-municipioId maps for cache, loading state, error state, alerts, sun/moon data, plus the `PageView` index for swiping between saved cities. This is the widest-reaching file in the app; most feature work touches it.
-- `utils/sun_calculator.dart`, `utils/moon_calculator.dart`, `utils/sky_gradients.dart` — derive sun phase / moon phase / background gradient from coordinates and time, driving the dynamic day/night background.
+- `data/remote/OpenMeteoApi.kt` — one call returns hourly + daily. Returns the **raw JSON**, which is what gets cached, so the cache does not break when model shapes change.
+- `data/remote/AemetApi.kt` — AEMET's two-step protocol: the endpoint returns a signed URL in `datos`, and the payload is fetched from there. Also holds `AemetAreas.provinciaToArea`, a hand-built INE-province → AEMET-area table that is not documented anywhere.
+- `data/remote/AlertService.kt` — CAP parsing. AEMET concatenates several `<alert>` blocks in one body, so they are split with a regex before parsing. The regex uses a negative lookahead so a truncated block does not swallow the next valid one.
+- `data/remote/MunicipioSearchService.kt` — downloads AEMET's ~8.000-municipality master once and keeps it in memory. Indexes both AEMET's name form ("Palmas de Gran Canaria, Las") and the natural one ("Las Palmas de Gran Canaria").
+- `data/local/WeatherStorage.kt` — DataStore. Stores the raw Open-Meteo JSON plus alerts and sun times per municipality.
+- `data/local/FlutterPreferencesMigration.kt` — **do not delete while Flutter users remain.** Reads the SharedPreferences the Flutter app left behind (same package) so updating does not wipe saved cities. The value format is `<base64 prefix>!<json>`; the `!` is undocumented and was found by dumping the real file.
+- `domain/astro/SunCalc.kt` — own port of the SunCalc algorithms, replacing the Dart packages. Validated against physical facts (solstice day lengths, polar night, synodic month) rather than copied values.
+- `domain/weather/DailyCodeAggregator.kt` — recomputes the daily icon from the hourly codes. Open-Meteo's `daily.weather_code` is the *most significant* phenomenon of the day, not the most durable, which made the icon systematically pessimistic.
+- `ui/components/GlassCard.kt` — translucent card with a scrim that occludes the rain falling behind it. Compose has no native backdrop blur.
+- `ui/components/WeatherEffects.kt` — rain particles and lightning on a Canvas, following Breezy Weather's approach.
+- `work/BackgroundUpdateWorker.kt` — WorkManager periodic refresh; builds its own dependencies since it runs without UI.
 
-Models (`lib/models/`) generally expose a `fromOpenMeteoJson`/`fromJson` factory and are plain data classes (no codegen — no `freezed`/`json_serializable`).
+Time handling: Open-Meteo returns timestamps already in the location's timezone (`timezone=auto`), so they are parsed as `LocalDateTime` and treated as device-local — the same simplification the Flutter app made.
 
-## Agents
+`java.time` works on `minSdk 24` thanks to core library desugaring, enabled in `app/build.gradle.kts`.
 
-Nubo-specific work is often delegated to specialized subagents (`flutter-architect`, `flutter-qa-senior`, `flutter-release`, `security-auditor-nubo`, `api-reliability`) rather than implemented inline. When the user says "usa el agente X" or "con sonnet/opus" for a task matching one of these, dispatch to that subagent instead of implementing directly.
+## Gotchas
+
+- The AEMET API key is baked into `AemetApi.kt`, as it was in the Flutter app. It is a free public OpenData key already published in previous APKs and in the git history.
+- Weather icons are Material approximations: `material-icons-extended` has no "sun behind cloud", `Rainy` or `Foggy` equivalents to Lucide's.
+- Date formatters must be given an explicit Spanish locale, or day names come out in the device's language.
+- Robolectric is needed for tests touching `org.json`, pinned to `@Config(sdk = [34])` since it does not simulate API 36 yet.

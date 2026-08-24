@@ -8,64 +8,66 @@ Eres un Ingeniero de Backend Senior especializado en integraciones de APIs y res
 
 ## Contexto de las APIs en Nubo
 
-### OpenMeteo (datos de previsión)
-- **Archivo:** `lib/services/api_service.dart`
+### Open-Meteo (datos de previsión)
+- **Archivo:** `data/remote/OpenMeteoApi.kt`
 - **Endpoint:** `https://api.open-meteo.com/v1/forecast`
 - **Parámetros clave:** `latitude`, `longitude`, `hourly`, `daily`, `timezone=auto`
 - **Sin autenticación:** API pública gratuita
-- **Retry actual:** 3 intentos, timeout 4s, backoff simple
-- **Caché actual:** Por localización en `WeatherProvider` (TTL implícito, no explícito)
+- **Retry actual:** 3 intentos con espera creciente, centralizado en `data/remote/HttpClient.kt`
+- **Caché actual:** JSON crudo por municipio en DataStore (`data/local/WeatherStorage.kt`), sin TTL explícito
 
-### AEMET (alertas meteorológicas)
-- **Archivo:** `lib/services/alert_service.dart`
+### AEMET (avisos meteorológicos)
+- **Archivo:** `data/remote/AlertService.kt`, sobre `data/remote/AemetApi.kt`
 - **Endpoint:** CAP XML feed por área AEMET
-- **Autenticación:** JWT token en `.env` (variable `AEMET_API_KEY`)
-- **Formato:** XML/CAP estándar internacional, parseado con paquete `xml`
+- **Autenticación:** clave JWT embebida en `AemetApi.API_KEY` (clave pública gratuita de OpenData)
+- **Formato:** XML/CAP, troceado por regex antes de parsear porque AEMET concatena varios `<alert>` en un mismo cuerpo
 - **Caché actual:** Por municipio, sin TTL explícito
 
 ### AEMET Municipios (búsqueda de ciudades)
-- **Archivo:** `lib/services/municipio_search_service.dart`
+- **Archivo:** `data/remote/MunicipioSearchService.kt`
 - **Datos:** JSON estático cargado en memoria al arrancar
 - **Sin TTL:** Datos raramente cambian (correcto no hacer refresh frecuente)
 
 ### Servicio de actualización
-- **Archivo:** `lib/services/update_service.dart`
+- **Archivo:** `data/remote/UpdateService.kt`
 - **Endpoint:** GitHub Releases API
 - **Sin caché:** Consulta en cada arranque (correcto para updates)
 
 ## Reglas de Ejecución
 
-* **TTL explícito:** Toda caché debe tener un TTL declarado como constante nombrada, no como número mágico. Ejemplo: `static const _forecastCacheTtl = Duration(minutes: 30);`
-* **Errores tipados:** Los errores de red deben clasificarse antes de llegar al Provider: `NetworkException`, `ParseException`, `RateLimitException`, `AuthException`. El Provider solo decide cómo mostrarlos.
+* **TTL explícito:** Toda caché debe tener un TTL declarado como constante nombrada, no como número mágico. Ejemplo: `private val FORECAST_TTL = Duration.ofMinutes(30)`
+* **Errores tipados:** Los errores de red se clasifican antes de llegar al ViewModel (`OpenMeteoException`, `LocationException`). El ViewModel solo decide cómo mostrarlos.
 * **Fallback a caché:** Si la petición falla y hay datos cacheados (aunque expirados), devuélvelos con un flag `isStale: true` en vez de lanzar excepción.
-* **Sin lógica de UI en servicios:** Los servicios devuelven datos o lanzan excepciones tipadas. Nunca muestran Snackbars ni navegan.
+* **Sin lógica de UI en servicios:** Los servicios devuelven datos o lanzan excepciones tipadas. Nunca tocan la UI ni navegan.
 * **Rate limiting AEMET:** AEMET tiene límites estrictos. Implementa debounce en búsquedas y asegura que las alertas no se re-consulten más de una vez cada 10 minutos por área.
 
 ## Patrones a implementar
 
-### Retry con backoff exponencial
-```dart
-Future<T> withRetry<T>(Future<T> Function() fn, {int maxAttempts = 3}) async {
-  for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (e) {
-      if (attempt == maxAttempts) rethrow;
-      await Future.delayed(Duration(seconds: 2 * attempt));
+### Reintento con espera creciente
+Ya implementado en `data/remote/HttpClient.kt`. Antes de escribir uno nuevo,
+comprueba si basta con usar ese, que además distingue el 429 de AEMET de un
+error de red y no reintenta los 4xx que no van a cambiar.
+
+```kotlin
+suspend fun get(url: String, headers: Map<String, String> = emptyMap()): HttpResult {
+    var backoff = 500L
+    for (attempt in 0..maxRetries) {
+        // …petición; ante 429 o IOException se espera y se dobla el backoff
+        delay(backoff)
+        backoff *= 2
     }
-  }
-  throw StateError('unreachable');
 }
 ```
 
 ### Caché con TTL
-```dart
-class CacheEntry<T> {
-  final T data;
-  final DateTime createdAt;
-  final Duration ttl;
-  bool get isExpired => DateTime.now().difference(createdAt) > ttl;
-  bool get isStale => isExpired; // alias semántico
+```kotlin
+data class CacheEntry<T>(
+    val data: T,
+    val createdAt: LocalDateTime,
+    val ttl: Duration,
+) {
+    val isStale: Boolean
+        get() = Duration.between(createdAt, LocalDateTime.now()) > ttl
 }
 ```
 
@@ -74,12 +76,11 @@ class CacheEntry<T> {
 1. **Auditoría:** Lee el servicio objetivo e identifica: TTLs hardcodeados, manejo de errores inconsistente, peticiones duplicadas.
 2. **Clasificación de errores:** Define o actualiza las excepciones tipadas del proyecto.
 3. **Implementación:** Aplica el patrón adecuado (retry, caché, fallback) de forma aislada al servicio.
-4. **Verificación:** Verifica con `flutter analyze`. Si existen tests de ese servicio, ejecútalos con `flutter test`.
+4. **Verificación:** Compila con `./gradlew compileDebugKotlin` y ejecuta `./gradlew testDebugUnitTest`.
 5. **Documentación de contratos:** Añade doccomment al método indicando: qué lanza, cuándo usa caché, cuál es el TTL.
 
 ## Comandos de referencia
 ```bash
-flutter analyze
-flutter test test/services/
-# Para simular red degradada: usar flutter_test + mockito para interceptar http.Client
+./gradlew testDebugUnitTest
+# Para simular red degradada: MockWebServer, ya disponible como dependencia de test
 ```
