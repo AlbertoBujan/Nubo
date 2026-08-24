@@ -81,88 +81,94 @@ private fun DailyRow(
             ?.toColor()
     }
 
-    GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 16.dp,
-        tint = Color.White.copy(alpha = if (isToday) 0.12f else 0.06f),
-        borderColor = Color.White.copy(alpha = 0.10f),
-        contentPadding = 0.dp,
-    ) {
-        // El aviso se marca con un punto en la esquina y no tiñendo el borde:
-        // el borde de color competía con el resto de la fila y ensuciaba la
-        // lectura de la lista completa.
+    // El punto va fuera de la GlassCard, no dentro: la tarjeta recorta su
+    // contenido con las esquinas redondeadas, así que un punto interior se
+    // vería cortado justo donde tiene que verse entero.
+    Box(Modifier.fillMaxWidth()) {
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 16.dp,
+            tint = Color.White.copy(alpha = if (isToday) 0.12f else 0.06f),
+            borderColor = Color.White.copy(alpha = 0.10f),
+            contentPadding = 0.dp,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = dayLabel(forecast.date),
+                    color = if (isToday) Color.White else Color.White.copy(alpha = 0.75f),
+                    fontSize = 15.sp,
+                    fontWeight = if (isToday) FontWeight.W600 else FontWeight.Normal,
+                    modifier = Modifier.width(92.dp),
+                )
+
+                Icon(
+                    imageVector = WeatherCode.fromCode(forecast.skyStateCode).icon.toImageVector(),
+                    contentDescription = forecast.skyDescription,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+
+                Spacer(Modifier.width(10.dp))
+
+                Box(Modifier.width(44.dp)) {
+                    val probability = forecast.precipitationProbability ?: 0
+                    if (probability > 0) {
+                        Text(
+                            "$probability%",
+                            color = Color(0xFF64B5F6),
+                            fontSize = 13.sp,
+                        )
+                    }
+                }
+
+                Text(
+                    forecast.tempMin?.let { "$it°" } ?: "--",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 15.sp,
+                    modifier = Modifier.width(38.dp),
+                )
+
+                TemperatureRangeBar(
+                    min = forecast.tempMin ?: globalMin,
+                    max = forecast.tempMax ?: globalMax,
+                    globalMin = globalMin,
+                    globalMax = globalMax,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 6.dp),
+                )
+
+                Text(
+                    forecast.tempMax?.let { "$it°" } ?: "--",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.W600,
+                    modifier = Modifier.width(40.dp),
+                )
+            }
+        }
+
+        // Punto del nivel más grave, montado sobre la esquina redondeada:
+        // ahí destaca sin robarle sitio a ningún dato de la fila.
         if (alertColor != null) {
             Box(
                 Modifier
                     .align(Alignment.TopStart)
-                    .padding(start = 12.dp, top = 6.dp)
-                    .size(8.dp)
+                    .size(ALERT_DOT_SIZE)
                     .clip(CircleShape)
                     .background(alertColor),
             )
         }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = dayLabel(forecast.date),
-                color = if (isToday) Color.White else Color.White.copy(alpha = 0.75f),
-                fontSize = 15.sp,
-                fontWeight = if (isToday) FontWeight.W600 else FontWeight.Normal,
-                modifier = Modifier.width(92.dp),
-            )
-
-            Icon(
-                imageVector = WeatherCode.fromCode(forecast.skyStateCode).icon.toImageVector(),
-                contentDescription = forecast.skyDescription,
-                tint = Color.White,
-                modifier = Modifier.size(24.dp),
-            )
-
-            Spacer(Modifier.width(10.dp))
-
-            Box(Modifier.width(44.dp)) {
-                val probability = forecast.precipitationProbability ?: 0
-                if (probability > 0) {
-                    Text(
-                        "$probability%",
-                        color = Color(0xFF64B5F6),
-                        fontSize = 13.sp,
-                    )
-                }
-            }
-
-            Text(
-                forecast.tempMin?.let { "$it°" } ?: "--",
-                color = Color.White.copy(alpha = 0.65f),
-                fontSize = 15.sp,
-                modifier = Modifier.width(38.dp),
-            )
-
-            TemperatureRangeBar(
-                min = forecast.tempMin ?: globalMin,
-                max = forecast.tempMax ?: globalMax,
-                globalMin = globalMin,
-                globalMax = globalMax,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 6.dp),
-            )
-
-            Text(
-                forecast.tempMax?.let { "$it°" } ?: "--",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.W600,
-                modifier = Modifier.width(40.dp),
-            )
-        }
     }
 }
+
+/** Diámetro del punto de aviso de la fila diaria. */
+private val ALERT_DOT_SIZE = 9.dp
 
 private fun dayLabel(date: LocalDate): String {
     val today = LocalDate.now()
