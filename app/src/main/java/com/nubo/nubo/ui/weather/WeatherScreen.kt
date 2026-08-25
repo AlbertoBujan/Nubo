@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -47,8 +49,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nubo.nubo.domain.weather.SkyCondition
@@ -111,6 +116,32 @@ fun WeatherScreen(
 
     val pullState = rememberPullToRefreshState()
 
+    // Un desplazamiento vertical por ciudad, guardado aquí arriba porque lo
+    // necesitan dos sitios: la página, que se desplaza, y la barra superior,
+    // que recoge el nombre cuando la página baja. Se crea a mano en vez de con
+    // `rememberScrollState` porque el número de páginas cambia y no se puede
+    // llamar a `remember` un número variable de veces.
+    val pageScrolls = remember { mutableStateMapOf<String, ScrollState>() }
+
+    fun scrollOf(locationId: String): ScrollState =
+        pageScrolls.getOrPut(locationId) { ScrollState(0) }
+
+    /**
+     * Cuánto ha colapsado la cabecera, de 0 a 1.
+     *
+     * Se mide sobre la página que se está viendo. Al cambiar de ciudad
+     * arrastrando, el valor salta al de la nueva, que es lo correcto: cada
+     * ciudad recuerda por dónde iba.
+     */
+    val collapsePx = with(LocalDensity.current) { COLLAPSE_DISTANCE.toPx() }
+    val collapse by remember(state) {
+        derivedStateOf {
+            val id = state.locations.getOrNull(pagerState.currentPage)?.locationId
+            val offset = id?.let { pageScrolls[it]?.value } ?: 0
+            (offset / collapsePx).coerceIn(0f, 1f)
+        }
+    }
+
     val gradient by remember(state) {
         derivedStateOf {
             interpolatedGradient(
@@ -169,6 +200,7 @@ fun WeatherScreen(
                     state = state,
                     pageCount = state.locations.size,
                     activeDot = pagerState.currentPage,
+                    collapse = collapse,
                     onOpenMenu = onOpenMenu,
                     onRefreshAll = onRefreshAll,
                     onRemoveLocation = onRemoveLocation,
@@ -211,7 +243,15 @@ fun WeatherScreen(
                     ) { page ->
                         val city = state.cityAt(page)
                         if (city != null) {
-                            CityPage(city = city, onRetry = { onRetry(city.locationId) })
+                            CityPage(
+                                city = city,
+                                scrollState = scrollOf(city.locationId),
+                                // El nombre grande solo se desvanece en la
+                                // página que se ve; las de al lado conservan
+                                // el suyo entero mientras asoman al deslizar.
+                                collapse = if (page == pagerState.currentPage) collapse else 0f,
+                                onRetry = { onRetry(city.locationId) },
+                            )
                         }
                     }
                 }
@@ -249,10 +289,16 @@ private fun TopBar(
     state: WeatherUiState,
     pageCount: Int,
     activeDot: Int,
+    /** 0 con la página arriba del todo, 1 con la cabecera ya recogida. */
+    collapse: Float,
     onOpenMenu: () -> Unit,
     onRefreshAll: () -> Unit,
     onRemoveLocation: (Int) -> Unit,
 ) {
+    val nameAlpha = topBarNameAlpha(collapse)
+
+    val dotsAlpha = paginationDotsAlpha(collapse)
+
     Box(
         Modifier
             .fillMaxWidth()
@@ -263,20 +309,46 @@ private fun TopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Box(
-                Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.10f))
-                    .clickable(onClick = onOpenMenu),
-                contentAlignment = Alignment.Center,
+            Row(
+                // Ocupa el hueco que deja el indicador de frescura, así que el
+                // nombre nunca puede crecer por debajo de él.
+                modifier = Modifier.weight(1f).height(36.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    Icons.Filled.Menu,
-                    "Menú",
-                    tint = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier.size(20.dp),
-                )
+                // Sin fondo, pero conservando los 36 dp: es la zona que se
+                // pulsa, y el icono solo mide 20.
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onOpenMenu),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.Menu,
+                        "Menú",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+
+                if (nameAlpha > 0f) {
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        state.currentLocation?.nombre.orEmpty(),
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.W600,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = nameAlpha
+                            // Sube los últimos puntos mientras aparece, para
+                            // que se lea como que llega desde abajo.
+                            translationY = (1f - nameAlpha) * NAME_RISE.toPx()
+                        },
+                    )
+                }
             }
 
             Row(
@@ -309,9 +381,13 @@ private fun TopBar(
             }
         }
 
-        // Puntos de paginación, centrados sobre la barra.
+        // Puntos de paginación, centrados sobre la barra. Se apagan al
+        // recogerse la cabecera para dejarle el sitio al nombre.
         Row(
-            Modifier.align(Alignment.TopCenter).height(36.dp),
+            Modifier
+                .align(Alignment.TopCenter)
+                .height(36.dp)
+                .graphicsLayer { alpha = dotsAlpha },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             repeat(pageCount) { index ->
@@ -325,7 +401,10 @@ private fun TopBar(
                         .background(
                             if (active) Color.White else Color.White.copy(alpha = 0.3f),
                         )
-                        .pointerInput(index, pageCount) {
+                        // Invisible no se pulsa: si no, mantener el dedo
+                        // sobre la nada borraría una ciudad.
+                        .pointerInput(index, pageCount, dotsAlpha > 0f) {
+                            if (dotsAlpha <= 0f) return@pointerInput
                             detectTapGestures(
                                 onLongPress = {
                                     if (pageCount > 1) onRemoveLocation(index)
@@ -339,12 +418,17 @@ private fun TopBar(
 }
 
 @Composable
-private fun CityPage(city: CityWeather, onRetry: () -> Unit) {
+private fun CityPage(
+    city: CityWeather,
+    scrollState: ScrollState,
+    collapse: Float,
+    onRetry: () -> Unit,
+) {
     when {
         city.isLoading && !city.hasData -> LoadingState(city.name)
         city.error != null && !city.hasData -> ErrorState(city.error, onRetry)
         !city.hasData -> NoDataState(city.name, onRetry)
-        else -> CityContent(city)
+        else -> CityContent(city, scrollState, collapse)
     }
 }
 
@@ -357,18 +441,78 @@ private fun CityPage(city: CityWeather, onRetry: () -> Unit) {
  */
 private val CARD_MARGIN = 20.dp
 
+/**
+ * Desplazamiento que recoge la cabecera del todo.
+ *
+ * Es algo más que el alto del nombre grande, para que el relevo termine justo
+ * cuando ese nombre ya ha salido por arriba.
+ */
+private val COLLAPSE_DISTANCE = 56.dp
+
+/** Punto del recorrido en el que la barra empieza a recoger el nombre. */
+private const val NAME_HANDOVER = 0.45f
+
+/**
+ * Opacidad del nombre en la barra superior.
+ *
+ * Entra en la segunda mitad del recorrido, cuando el nombre grande ya se ha
+ * ido: solapados un instante se leerían como dos nombres, no como uno que
+ * viaja.
+ */
+internal fun topBarNameAlpha(collapse: Float): Float =
+    ((collapse - NAME_HANDOVER) / (1f - NAME_HANDOVER)).coerceIn(0f, 1f)
+
+/**
+ * Opacidad de los puntos de paginación.
+ *
+ * Se apagan **justo** cuando el nombre empieza a entrar, y de ahí sale la
+ * garantía de que no pueden chocar: con muchas ciudades la fila de puntos es
+ * ancha y el nombre corre hacia ella, pero nunca se ven los dos a la vez. Se
+ * van sin pérdida, porque dicen en qué ciudad estás peor que el propio nombre,
+ * y vuelven al subir.
+ */
+internal fun paginationDotsAlpha(collapse: Float): Float =
+    (1f - collapse / NAME_HANDOVER).coerceIn(0f, 1f)
+
+/** Cuánto encoge el nombre grande al irse. */
+private const val NAME_SHRINK = 0.4f
+
+/** Lo que el nombre grande se adelanta al desplazamiento. */
+private val NAME_LIFT = 10.dp
+
+/** Desde dónde asoma el nombre pequeño al entrar en la barra. */
+private val NAME_RISE = 10.dp
+
 @Composable
-private fun CityContent(city: CityWeather) {
+private fun CityContent(city: CityWeather, scrollState: ScrollState, collapse: Float) {
     val (max, min) = city.todayRange
 
     Column(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(city.name, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.W500)
+        // El nombre grande se apaga y encoge mientras sube con el propio
+        // desplazamiento, y la barra lo recoge arriba. No es el mismo texto
+        // viajando —son dos, en árboles distintos—, pero al irse uno donde
+        // llega el otro se lee como uno solo.
+        Text(
+            city.name,
+            color = Color.White,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.W500,
+            modifier = Modifier.graphicsLayer {
+                alpha = 1f - collapse
+                val shrink = 1f - collapse * NAME_SHRINK
+                scaleX = shrink
+                scaleY = shrink
+                // Se adelanta un poco al desplazamiento: converge hacia la
+                // barra en vez de limitarse a subir con la página.
+                translationY = -collapse * NAME_LIFT.toPx()
+            },
+        )
 
         Text(
             city.currentTemperature?.let { "$it°" } ?: "--",
