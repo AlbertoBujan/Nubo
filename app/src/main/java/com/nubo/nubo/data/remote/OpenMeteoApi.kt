@@ -49,9 +49,13 @@ class OpenMeteoApi(private val http: HttpClient = HttpClient()) {
         const val BASE_URL = "https://api.open-meteo.com/v1"
         const val TIMEOUT_SECONDS = 10L
 
+        // `apparent_temperature` y `uv_index` vienen en esta misma llamada:
+        // alimentan la tarjeta de condiciones actuales sin coste de red. La
+        // calidad del aire, en cambio, vive en otro endpoint (`AirQualityApi`).
         const val HOURLY_FIELDS =
             "temperature_2m,relative_humidity_2m,precipitation_probability," +
-                "weather_code,wind_speed_10m,wind_direction_10m,is_day,dew_point_2m"
+                "weather_code,wind_speed_10m,wind_direction_10m,is_day,dew_point_2m," +
+                "apparent_temperature,uv_index"
 
         const val DAILY_FIELDS =
             "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"

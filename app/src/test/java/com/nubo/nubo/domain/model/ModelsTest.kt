@@ -9,7 +9,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.LocalDateTime
 
-class SavedLocationTest {
+class SavedLocationNameTest {
 
     @Test
     fun `reordena el articulo pospuesto de AEMET`() {
@@ -28,19 +28,6 @@ class SavedLocationTest {
     fun `no reordena cuando lo que sigue a la coma es un toponimo`() {
         // "Bilbao, Vizcaya" no debe convertirse en "Vizcaya Bilbao".
         assertEquals("Bilbao, Vizcaya", SavedLocation.formatNombre("Bilbao, Vizcaya"))
-    }
-
-    @Test
-    fun `la serializacion sobrevive a nombres con barra vertical`() {
-        val location = SavedLocation("28079", "Raro|Nombre")
-        val restored = SavedLocation.fromPrefsString(location.toPrefsString())
-        assertEquals(location.municipioId, restored?.municipioId)
-        assertEquals("Raro|Nombre", restored?.nombre)
-    }
-
-    @Test
-    fun `una cadena malformada no rompe la deserializacion`() {
-        assertNull(SavedLocation.fromPrefsString("sinseparador"))
     }
 
     @Test
@@ -88,11 +75,24 @@ class WeatherAlertTest {
 
     @Test
     fun `un aviso caducado deja de estar vigente`() {
-        val pasado = LocalDateTime.now().minusDays(1)
-        assertTrue(!alert("rojo", expires = pasado).isActiveOrUpcoming)
-        assertTrue(alert("rojo", expires = LocalDateTime.now().plusDays(1)).isActiveOrUpcoming)
+        val ahora = LocalDateTime.now()
+
+        assertTrue(!alert("rojo", expires = ahora.minusDays(1)).isActiveAt(ahora))
+        assertTrue(alert("rojo", expires = ahora.plusDays(1)).isActiveAt(ahora))
         // Sin fecha de fin se considera vigente.
-        assertTrue(alert("rojo").isActiveOrUpcoming)
+        assertTrue(alert("rojo").isActiveAt(ahora))
+    }
+
+    @Test
+    fun `la vigencia se juzga con la hora del sitio, no con la del movil`() {
+        // Un aviso español que caduca a las 23:00 hora peninsular sigue
+        // vigente a las 22:00 de allí aunque quien mire esté en Tokio, donde
+        // ya son las 05:00 del día siguiente.
+        val caducaAllí = LocalDateTime.of(2026, 8, 24, 23, 0)
+        val aviso = alert("naranja", expires = caducaAllí)
+
+        assertTrue(aviso.isActiveAt(LocalDateTime.of(2026, 8, 24, 22, 0)))
+        assertTrue(!aviso.isActiveAt(LocalDateTime.of(2026, 8, 25, 5, 0)))
     }
 
     @Test
@@ -156,5 +156,134 @@ class HourlyForecastCompassTest {
     fun `los limites de sector redondean al mas proximo`() {
         assertEquals("N", HourlyForecast.degreesToCompass(11.0))
         assertEquals("NNE", HourlyForecast.degreesToCompass(12.0))
+    }
+}
+
+/**
+ * Recorte de la predicción horaria por los dos extremos.
+ *
+ * Por delante se descartan las horas ya pasadas y por detrás todo lo que
+ * exceda [HourlyForecast.MAX_HOURS], porque a partir de ahí el detalle hora a
+ * hora no aporta sobre el resumen del día.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class HourlyForecastTrimTest {
+
+    /**
+     * Un `hourly` de Open-Meteo con [hours] horas a partir de la hora en curso.
+     *
+     * Empieza en la hora en punto actual y no en la anterior porque el corte
+     * inicial es `ahora - 1 h` **con minutos**: la hora en punto previa solo
+     * sobrevive si son las y cero, así que incluirla haría que la cuenta
+     * bailase según el minuto en que se lancen los tests.
+     *
+     * El huso del JSON es el del sistema para que la hora de corte se calcule
+     * contra el mismo reloj con el que se generan las marcas.
+     */
+    private fun payload(hours: Int): org.json.JSONObject {
+        val start = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0)
+        val times = org.json.JSONArray()
+        val temps = org.json.JSONArray()
+        repeat(hours) { i ->
+            times.put(start.plusHours(i.toLong()).toString())
+            temps.put(15.0 + i)
+        }
+        return org.json.JSONObject().apply {
+            put("timezone", java.time.ZoneId.systemDefault().id)
+            put(
+                "hourly",
+                org.json.JSONObject().apply {
+                    put("time", times)
+                    put("temperature_2m", temps)
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `una semana de horas se queda en dos dias`() {
+        val parsed = HourlyForecast.fromOpenMeteoJson(payload(hours = 168))
+        assertEquals(HourlyForecast.MAX_HOURS, parsed.size)
+    }
+
+    @Test
+    fun `el recorte cae en un numero justo de bloques de seis`() {
+        assertEquals(0, HourlyForecast.MAX_HOURS % 6)
+    }
+
+    @Test
+    fun `si la api devuelve menos horas se respetan todas`() {
+        val parsed = HourlyForecast.fromOpenMeteoJson(payload(hours = 12))
+        assertEquals(12, parsed.size)
+    }
+
+    @Test
+    fun `las horas conservadas son las primeras, no unas cualesquiera`() {
+        val parsed = HourlyForecast.fromOpenMeteoJson(payload(hours = 168))
+        assertEquals(15, parsed.first().temperature)
+        assertEquals(15 + HourlyForecast.MAX_HOURS - 1, parsed.last().temperature)
+    }
+}
+
+/** Lectura del `hourly` de la API de calidad del aire. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class AirQualityForecastTest {
+
+    private fun json(vararg values: Any?): org.json.JSONObject {
+        val times = org.json.JSONArray()
+        val aqi = org.json.JSONArray()
+        values.forEachIndexed { i, value ->
+            times.put("2026-08-25T${"%02d".format(i)}:00")
+            if (value == null) aqi.put(org.json.JSONObject.NULL) else aqi.put(value)
+        }
+        return org.json.JSONObject().apply {
+            put(
+                "hourly",
+                org.json.JSONObject().apply {
+                    put("time", times)
+                    put("european_aqi", aqi)
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `lee la serie horaria completa`() {
+        val parsed = AirQualityForecast.fromOpenMeteoJson(json(18, 22, 41))
+
+        assertEquals(3, parsed.size)
+        assertEquals(18, parsed[0].europeanAqi)
+        assertEquals(41, parsed[2].europeanAqi)
+        assertEquals(LocalDateTime.of(2026, 8, 25, 2, 0), parsed[2].dateTime)
+    }
+
+    @Test
+    fun `las horas sin dato se descartan, no se rellenan`() {
+        // Fuera de Europa la resolución del modelo es peor y hay huecos.
+        val parsed = AirQualityForecast.fromOpenMeteoJson(json(18, null, 41))
+
+        assertEquals(2, parsed.size)
+        assertEquals(listOf(18, 41), parsed.map { it.europeanAqi })
+    }
+
+    @Test
+    fun `redondea el indice al entero mas proximo`() {
+        val parsed = AirQualityForecast.fromOpenMeteoJson(json(19.6, 19.4))
+
+        assertEquals(listOf(20, 19), parsed.map { it.europeanAqi })
+    }
+
+    @Test
+    fun `una respuesta sin bloque horario no revienta`() {
+        assertTrue(
+            AirQualityForecast.fromOpenMeteoJson(org.json.JSONObject()).isEmpty(),
+        )
+        assertTrue(
+            AirQualityForecast.fromOpenMeteoJson(
+                org.json.JSONObject().put("hourly", org.json.JSONObject()),
+            ).isEmpty(),
+        )
     }
 }

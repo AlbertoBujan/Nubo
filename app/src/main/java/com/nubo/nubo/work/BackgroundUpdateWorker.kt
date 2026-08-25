@@ -35,28 +35,29 @@ class BackgroundUpdateWorker(
             return Result.success()
         }
 
-        val weatherRepository = ServiceLocator.weatherRepository(applicationContext)
+        val weatherRepository = ServiceLocator.weatherRepository()
         val alertRepository = ServiceLocator.alertRepository(applicationContext)
 
         var updated = 0
         for (location in locations) {
             try {
-                val forecast = weatherRepository.getForecast(location.municipioId)
-                val alerts = runCatching { alertRepository.getAlerts(location.municipioId) }
+                val forecast = weatherRepository.getForecast(location)
+                val alerts = runCatching { alertRepository.getAlerts(location) }
                     .getOrDefault(emptyList())
 
                 storage.saveWeather(
-                    municipioId = location.municipioId,
+                    locationId = location.locationId,
                     rawJson = forecast.rawJson,
                     alerts = alerts,
                     // El sol y la luna los recalcula la app al abrirse; aquí
                     // solo importa dejar frescos predicción y avisos.
                     sunTimes = null,
                     updatedAt = LocalDateTime.now(),
+                    airQualityJson = forecast.airQualityRawJson,
                 )
                 updated++
             } catch (e: Exception) {
-                Log.w(TAG, "Error actualizando ${location.municipioId}: ${e.message}")
+                Log.w(TAG, "Error actualizando ${location.locationId}: ${e.message}")
             }
         }
 

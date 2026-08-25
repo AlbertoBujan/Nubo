@@ -1,8 +1,18 @@
 package com.nubo.nubo.ui.components
 
+import androidx.compose.animation.core.DecayAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.calculateTargetValue
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -30,6 +41,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -43,9 +55,20 @@ import com.nubo.nubo.domain.model.WeatherAlert
 import com.nubo.nubo.domain.weather.WeatherCode
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
-private val ITEM_WIDTH = 65.dp
-private val CHART_PADDING_LEFT = 32.dp
+/**
+ * Horas que caben a la vez, y tamaño del bloque que avanza cada deslizamiento.
+ *
+ * El ancho de cada columna se **calcula** a partir del de la tarjeta en vez de
+ * ser fijo: con una anchura fija de 65 dp la sexta hora se cortaba por la mitad
+ * en la posición inicial, porque no había ninguna relación entre ese número y
+ * el ancho real de la pantalla.
+ */
+private const val VISIBLE_HOURS = 6
+
 private val CHART_HEIGHT = 110.dp
 
 private val DEW_COLOR = Color(0xFF80DEEA)
@@ -59,22 +82,33 @@ private val HOUR: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", SPANI
 fun HourlyView(
     forecasts: List<HourlyForecast>,
     alerts: List<WeatherAlert>,
+    /** Hora local del sitio: las marcas de la predicción están en su huso. */
+    nowThere: java.time.LocalDateTime,
     modifier: Modifier = Modifier,
 ) {
     if (forecasts.isEmpty()) return
 
-    val hasAnyRain = remember(forecasts) {
-        forecasts.any { (it.precipitationProbability ?: 0) > 0 }
+    // La lista se recorta a un múltiplo de [VISIBLE_HOURS] para que el último
+    // bloque no se quede a medias, con media columna cortada a cada lado.
+    // `HourlyForecast.MAX_HOURS` ya es múltiplo de seis, así que normalmente
+    // esto no quita nada; hace falta cuando llegan menos horas de las
+    // esperadas, por ejemplo al leer una caché ya muy consumida.
+    val hours = remember(forecasts) {
+        val whole = forecasts.size - forecasts.size % VISIBLE_HOURS
+        if (whole == 0) forecasts else forecasts.take(whole)
+    }
+
+    val hasAnyRain = remember(hours) {
+        hours.any { (it.precipitationProbability ?: 0) > 0 }
     }
     val scrollState = rememberScrollState()
 
     // Índice de la hora más cercana al momento actual. Se calcula una sola vez
     // aquí y no dentro de cada columna: comparando por separado, dos horas
     // contiguas podían cumplir el criterio y ambas se rotulaban "Ahora".
-    val nowIndex = remember(forecasts) {
-        val now = java.time.LocalDateTime.now()
-        forecasts.indices.minByOrNull {
-            java.time.Duration.between(forecasts[it].dateTime, now).abs().toMillis()
+    val nowIndex = remember(hours, nowThere) {
+        hours.indices.minByOrNull {
+            java.time.Duration.between(hours[it].dateTime, nowThere).abs().toMillis()
         } ?: -1
     }
 
@@ -91,28 +125,101 @@ fun HourlyView(
 
             Spacer(Modifier.height(16.dp))
 
-            Row(Modifier.horizontalScroll(scrollState)) {
+            BoxWithConstraints {
+                val itemWidth = maxWidth / VISIBLE_HOURS
+                val blockPx = with(LocalDensity.current) {
+                    (itemWidth * VISIBLE_HOURS).toPx()
+                }
+
                 Column {
-                    Row(Modifier.padding(start = CHART_PADDING_LEFT)) {
-                        forecasts.forEachIndexed { index, forecast ->
+                    Row(
+                        Modifier
+                            .horizontalScroll(
+                                state = scrollState,
+                                flingBehavior = rememberBlockFling(scrollState, blockPx),
+                            ),
+                    ) {
+                        hours.forEachIndexed { index, forecast ->
                             HourColumn(
                                 forecast = forecast,
                                 alerts = alerts,
                                 hasAnyRain = hasAnyRain,
                                 isNow = index == nowIndex,
-                                modifier = Modifier.width(ITEM_WIDTH),
+                                today = nowThere.toLocalDate(),
+                                modifier = Modifier.width(itemWidth),
                             )
                         }
                     }
+
+                    // El gráfico no va dentro del scroll: ocupa el ancho de la
+                    // tarjeta y se dibuja desplazado a mano. Así la curva no
+                    // arrastra consigo el trabajo de medir 48 columnas.
                     TemperatureChart(
-                        forecasts = forecasts,
+                        forecasts = hours,
+                        itemWidth = itemWidth,
+                        scroll = scrollState.value,
                         modifier = Modifier
-                            .width(CHART_PADDING_LEFT + ITEM_WIDTH * forecasts.size + 16.dp)
+                            .fillMaxWidth()
                             .height(CHART_HEIGHT),
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * Inercia que asienta el carrusel en bloques de [VISIBLE_HOURS] horas.
+ *
+ * El destino se limita a los dos bloques contiguos, así que **un gesto avanza
+ * un bloque** por rápido que sea: dejar que la inercia decidiera haría que un
+ * mismo movimiento saltara dos o tres según la fuerza, y la predicción por
+ * horas se lee de seis en seis, no a ojo.
+ *
+ * Al soltar sin apenas velocidad el destino es el bloque más cercano, que es
+ * lo que devuelve la columna a su sitio si el arrastre se queda a medias.
+ */
+@Composable
+private fun rememberBlockFling(scrollState: ScrollState, blockWidth: Float): FlingBehavior {
+    val decay = remember { exponentialDecay<Float>() }
+    return remember(scrollState, blockWidth, decay) {
+        BlockFlingBehavior(scrollState, blockWidth, decay)
+    }
+}
+
+private class BlockFlingBehavior(
+    private val scrollState: ScrollState,
+    private val blockWidth: Float,
+    private val decay: DecayAnimationSpec<Float>,
+) : FlingBehavior {
+
+    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+        if (blockWidth <= 0f) return initialVelocity
+
+        val current = scrollState.value.toFloat()
+        val target = blockTarget(
+            current = current,
+            projected = decay.calculateTargetValue(current, initialVelocity),
+            blockWidth = blockWidth,
+            maxScroll = scrollState.maxValue.toFloat(),
+        )
+
+        var last = current
+        animate(
+            initialValue = current,
+            targetValue = target,
+            initialVelocity = initialVelocity,
+            // Muelle sin rebote: recoge la velocidad del dedo, así que el
+            // frenado no da un tirón al empezar la animación.
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+        ) { value, _ ->
+            scrollBy(value - last)
+            last = value
+        }
+        return 0f
     }
 }
 
@@ -122,9 +229,9 @@ private fun HourColumn(
     alerts: List<WeatherAlert>,
     hasAnyRain: Boolean,
     isNow: Boolean,
+    today: LocalDate,
     modifier: Modifier = Modifier,
 ) {
-    val today = LocalDate.now()
 
     val dayLabel = when (forecast.dateTime.toLocalDate()) {
         today -> "Hoy"
@@ -231,11 +338,16 @@ private fun windColor(speed: Int?): Color = when {
 @Composable
 private fun TemperatureChart(
     forecasts: List<HourlyForecast>,
+    itemWidth: Dp,
+    /** Desplazamiento del carrusel, en píxeles. */
+    scroll: Int,
     modifier: Modifier = Modifier,
 ) {
     val measurer = rememberTextMeasurer()
 
-    Canvas(modifier) {
+    // Se dibujan las 48 horas y el recorte se encarga del resto: decidir por
+    // dónde cortar la curva sale más caro que dejar que la GPU la recorte.
+    Canvas(modifier.clipToBounds()) {
         val temps = forecasts.mapNotNull { it.temperature?.toFloat() }
         if (temps.isEmpty()) return@Canvas
 
@@ -260,28 +372,27 @@ private fun TemperatureChart(
         val paddingTop = 10.dp.toPx()
         val paddingBottom = 25.dp.toPx()
         val chartHeight = size.height - paddingTop - paddingBottom
-        val itemWidth = ITEM_WIDTH.toPx()
-        val paddingLeft = CHART_PADDING_LEFT.toPx()
+        val itemPx = itemWidth.toPx()
 
         fun yFor(value: Float) = paddingTop + chartHeight * (1f - (value - minT) / (maxT - minT))
 
-        drawLegend(measurer, maxT, minT, paddingTop, paddingBottom)
-
-        val guide = Color.White.copy(alpha = 0.1f)
-        drawLine(guide, Offset(paddingLeft, paddingTop), Offset(size.width, paddingTop), 1f)
-        drawLine(
-            guide,
-            Offset(paddingLeft, size.height - paddingBottom),
-            Offset(size.width, size.height - paddingBottom),
-            1f,
-        )
-
+        // Cada punto va bajo el centro de su columna, y se le restan los
+        // píxeles desplazados para que siga al carrusel.
         val points = forecasts.mapIndexed { i, forecast ->
             Offset(
-                paddingLeft + (i + 0.5f) * itemWidth,
+                (i + 0.5f) * itemPx - scroll,
                 yFor(forecast.temperature?.toFloat() ?: minT),
             )
         }
+
+        val guide = Color.White.copy(alpha = 0.1f)
+        drawLine(guide, Offset(0f, paddingTop), Offset(size.width, paddingTop), 1f)
+        drawLine(
+            guide,
+            Offset(0f, size.height - paddingBottom),
+            Offset(size.width, size.height - paddingBottom),
+            1f,
+        )
 
         // Separadores verticales por hora.
         points.forEach { point ->
@@ -301,23 +412,41 @@ private fun TemperatureChart(
     }
 }
 
-private fun DrawScope.drawLegend(
-    measurer: TextMeasurer,
-    maxT: Float,
-    minT: Float,
-    paddingTop: Float,
-    paddingBottom: Float,
-) {
-    val style = TextStyle(color = Color.White.copy(alpha = 0.54f), fontSize = 10.sp)
+/**
+ * Si el punto cae dentro de lo que se ve, con un margen holgado.
+ *
+ * Solo se consulta antes de medir y pintar texto: con 48 horas cargadas y seis
+ * a la vista, rotularlas todas en cada fotograma del desplazamiento es trabajo
+ * tirado. Los trazos sí se dibujan enteros y los recorta el lienzo.
+ */
+private fun DrawScope.isLabelVisible(x: Float): Boolean {
+    val margin = 40.dp.toPx()
+    return x > -margin && x < size.width + margin
+}
 
-    val maxText = measurer.measure("${maxT.toInt()}°", style)
-    drawText(maxText, topLeft = Offset(8.dp.toPx(), paddingTop - maxText.size.height / 2))
-
-    val minText = measurer.measure("${minT.toInt()}°", style)
-    drawText(
-        minText,
-        topLeft = Offset(8.dp.toPx(), size.height - paddingBottom - minText.size.height / 2),
-    )
+/**
+ * Prolonga una serie una columna por cada lado, siguiendo su propia pendiente.
+ *
+ * El primer punto cae a media columna del borde, así que sin esto la curva
+ * empieza en seco con un hueco delante, y lo mismo por detrás en el último
+ * bloque. Los puntos añadidos solo alimentan el trazo: no llevan círculo ni
+ * etiqueta, porque no son horas, son la continuación de la línea hasta el
+ * borde de la tarjeta.
+ *
+ * Se extrapola en línea recta en vez de prolongar en horizontal para que no
+ * aparezca un codo justo en la primera hora. Al tratarse de una columna, lo
+ * que se ve nunca pasa de media, así que el desvío está acotado a la mitad de
+ * lo que sube o baja esa primera hora.
+ */
+internal fun extendToEdges(points: List<Offset>): List<Offset> {
+    if (points.size < 2) return points
+    val head = points[0] * 2f - points[1]
+    val tail = points[points.lastIndex] * 2f - points[points.lastIndex - 1]
+    return buildList(points.size + 2) {
+        add(head)
+        addAll(points)
+        add(tail)
+    }
 }
 
 private fun DrawScope.drawDewCurve(
@@ -338,9 +467,10 @@ private fun DrawScope.drawDewCurve(
     val gap = 4.dp.toPx()
     val color = DEW_COLOR.copy(alpha = 0.7f)
 
-    for (i in 0 until dewPoints.size - 1) {
-        val from = dewPoints[i]
-        val to = dewPoints[i + 1]
+    val stroked = extendToEdges(dewPoints)
+    for (i in 0 until stroked.size - 1) {
+        val from = stroked[i]
+        val to = stroked[i + 1]
         val delta = to - from
         val length = kotlin.math.hypot(delta.x, delta.y)
         if (length == 0f) continue
@@ -372,6 +502,7 @@ private fun DrawScope.drawDewCurve(
     // Etiquetas en índices impares, intercaladas con las de temperatura.
     val style = TextStyle(color = DEW_COLOR, fontSize = 10.sp, fontWeight = FontWeight.W500)
     for (i in 1 until dewPoints.size step 2) {
+        if (!isLabelVisible(dewPoints[i].x)) continue
         val value = forecasts[i].dewPoint ?: continue
         val text = measurer.measure("$value°", style)
         drawText(
@@ -392,16 +523,20 @@ private fun DrawScope.drawTemperatureCurve(
 ) {
     // Curva suave: cada tramo es una cúbica con los tiradores en el punto medio,
     // que evita los picos angulosos de unir los puntos con rectas.
+    val stroked = extendToEdges(points)
     val path = Path().apply {
-        moveTo(points.first().x, points.first().y)
-        for (i in 0 until points.size - 1) {
-            val p0 = points[i]
-            val p1 = points[i + 1]
+        moveTo(stroked.first().x, stroked.first().y)
+        for (i in 0 until stroked.size - 1) {
+            val p0 = stroked[i]
+            val p1 = stroked[i + 1]
             val midX = (p0.x + p1.x) / 2
             cubicTo(midX, p0.y, midX, p1.y, p1.x, p1.y)
         }
     }
 
+    // El degradado se ancla a las horas reales; los tramos prolongados quedan
+    // fuera del rango y `horizontalGradient` los pinta con el color del
+    // extremo, que es justo lo que se quiere.
     val colors = forecasts.map {
         TemperatureColors.forTemperature(it.temperature?.toFloat() ?: 0f)
     }
@@ -414,8 +549,8 @@ private fun DrawScope.drawTemperatureCurve(
     // Relleno tenue bajo la curva.
     val fill = Path().apply {
         addPath(path)
-        lineTo(points.last().x, size.height)
-        lineTo(points.first().x, size.height)
+        lineTo(stroked.last().x, size.height)
+        lineTo(stroked.first().x, size.height)
         close()
     }
     drawPath(
@@ -432,7 +567,7 @@ private fun DrawScope.drawTemperatureCurve(
     val style = TextStyle(color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     points.forEachIndexed { i, point ->
         val temp = forecasts[i].temperature ?: return@forEachIndexed
-        if (i % 2 == 0) {
+        if (i % 2 == 0 && isLabelVisible(point.x)) {
             val text = measurer.measure("$temp°", style)
             drawText(
                 text,
@@ -524,4 +659,33 @@ fun TemperatureRangeBar(
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2),
         )
     }
+}
+
+/**
+ * Dónde debe asentarse el carrusel tras un gesto.
+ *
+ * [projected] es donde pararía la inercia por sí sola. El destino se limita a
+ * los dos bloques que rodean la posición actual, y ahí está el fondo del
+ * asunto: sin ese recorte un gesto fuerte salta tres bloques y uno flojo
+ * ninguno, cuando lo que se espera es que cada gesto pase de bloque.
+ *
+ * Como durante el arrastre la posición ya es fraccionaria, el bloque de salida
+ * y el de llegada nunca coinciden y el gesto siempre avanza. Al soltar sin
+ * velocidad el proyectado es la posición actual y gana el bloque más cercano,
+ * que es lo que recoloca un arrastre a medias.
+ */
+internal fun blockTarget(
+    current: Float,
+    projected: Float,
+    blockWidth: Float,
+    maxScroll: Float,
+): Float {
+    if (blockWidth <= 0f) return current
+    val block = (projected / blockWidth)
+        .roundToInt()
+        .coerceIn(
+            floor(current / blockWidth).toInt(),
+            ceil(current / blockWidth).toInt(),
+        )
+    return (block * blockWidth).coerceIn(0f, maxScroll)
 }

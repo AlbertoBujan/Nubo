@@ -1,6 +1,8 @@
 package com.nubo.nubo.data.remote
 
 import com.nubo.nubo.domain.model.WeatherAlert
+import java.time.LocalDateTime
+import java.time.ZoneId
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 import java.io.ByteArrayInputStream
@@ -28,7 +30,7 @@ class AlertService(
      * Nunca lanza: si AEMET falla, devuelve lista vacía. Quedarse sin avisos es
      * preferible a que la pantalla del tiempo no cargue.
      */
-    suspend fun fetchAlerts(zonaAviso: String): List<WeatherAlert> {
+    suspend fun fetchAlerts(zonaAviso: String, zone: ZoneId): List<WeatherAlert> {
         // Sin zona no se puede filtrar, y devolver los de toda la comunidad
         // sería peor que no devolver ninguno.
         if (!ZONA_AVISO.matches(zonaAviso)) return emptyList()
@@ -43,7 +45,7 @@ class AlertService(
                 timeoutSeconds = TIMEOUT_SECONDS,
             ) ?: return emptyList()
 
-            parseCapAlerts(body, zonaAviso)
+            parseCapAlerts(body, zonaAviso, zone)
         } catch (_: Exception) {
             emptyList()
         }
@@ -55,7 +57,11 @@ class AlertService(
      * Solo conserva los de [zonaAviso], en español y de nivel distinto de
      * verde (que en el CAP de AEMET significa "sin aviso").
      */
-    internal fun parseCapAlerts(rawContent: String, zonaAviso: String): List<WeatherAlert> {
+    internal fun parseCapAlerts(
+        rawContent: String,
+        zonaAviso: String,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<WeatherAlert> {
         val alerts = mutableListOf<WeatherAlert>()
 
         for (match in ALERT_BLOCK.findAll(rawContent)) {
@@ -63,7 +69,7 @@ class AlertService(
             // se sigue con el siguiente.
             val parsed = runCatching {
                 val xml = """<?xml version="1.0" encoding="UTF-8"?>${match.value}"""
-                parseAlertBlock(xml, zonaAviso)
+                parseAlertBlock(xml, zonaAviso, zone)
             }.getOrNull() ?: continue
 
             alerts.addAll(parsed)
@@ -72,7 +78,11 @@ class AlertService(
         return alerts
     }
 
-    private fun parseAlertBlock(xml: String, zonaAviso: String): List<WeatherAlert>? {
+    private fun parseAlertBlock(
+        xml: String,
+        zonaAviso: String,
+        zone: ZoneId,
+    ): List<WeatherAlert>? {
         val factory = DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = false
             // El payload viene de un tercero: se cierran las entidades externas.
@@ -94,13 +104,17 @@ class AlertService(
             val language = info.childText("language") ?: ""
             if (!language.startsWith("es")) continue
 
-            parseInfoElement(info, zonaAviso)?.let { result += it }
+            parseInfoElement(info, zonaAviso, zone)?.let { result += it }
         }
 
         return result.ifEmpty { null }
     }
 
-    private fun parseInfoElement(info: Element, zonaAviso: String): WeatherAlert? {
+    private fun parseInfoElement(
+        info: Element,
+        zonaAviso: String,
+        zone: ZoneId,
+    ): WeatherAlert? {
         if (!matchesZona(info, zonaAviso)) return null
 
         // El nivel y la probabilidad viajan como <parameter> con nombre libre.
@@ -127,12 +141,12 @@ class AlertService(
             description = info.childText("description").orEmpty(),
             instruction = info.childText("instruction").orEmpty(),
             areaDescription = info.firstChild("area")?.childText("areaDesc").orEmpty(),
-            onset = WeatherAlert.parseDateTime(info.childText("onset")),
-            expires = WeatherAlert.parseDateTime(info.childText("expires")),
+            onset = WeatherAlert.parseDateTime(info.childText("onset"), zone),
+            expires = WeatherAlert.parseDateTime(info.childText("expires"), zone),
             probability = probability,
         )
 
-        return alert.takeIf { it.isActiveOrUpcoming }
+        return alert.takeIf { it.isActiveAt(LocalDateTime.now(zone)) }
     }
 
     /**

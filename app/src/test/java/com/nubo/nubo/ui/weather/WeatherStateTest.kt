@@ -127,7 +127,7 @@ class CityWeatherTest {
     @Test
     fun `la temperatura actual sale de la hora mas proxima`() {
         val city = CityWeather(
-            municipioId = "28079",
+            locationId = "28079",
             name = "Madrid",
             hourly = listOf(hour(-3, 10), hour(0, 22), hour(5, 30)),
         )
@@ -145,7 +145,7 @@ class CityWeatherTest {
     fun `el rango del dia usa hoy y si no el primer dia disponible`() {
         val today = LocalDate.now()
         val city = CityWeather(
-            municipioId = "28079",
+            locationId = "28079",
             name = "Madrid",
             daily = listOf(
                 DailyForecast(today.plusDays(1), 30, 20, "0", "", null),

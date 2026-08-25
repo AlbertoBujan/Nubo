@@ -27,7 +27,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,9 +53,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nubo.nubo.domain.weather.SkyCondition
 import com.nubo.nubo.ui.components.AlertBox
+import com.nubo.nubo.ui.components.ConditionsCard
 import com.nubo.nubo.ui.components.DailyView
 import com.nubo.nubo.ui.components.HourlyView
 import com.nubo.nubo.ui.components.SunMoonCard
+import com.nubo.nubo.ui.components.SkyLayer
+import com.nubo.nubo.ui.components.SkyLayerOverlay
 import com.nubo.nubo.ui.components.WeatherEffect
 import com.nubo.nubo.ui.components.WeatherEffectsOverlay
 import com.nubo.nubo.ui.components.toImageVector
@@ -119,13 +121,23 @@ fun WeatherScreen(
         }
     }
 
-    val effect by remember(state) {
+    // La ciudad cuyo cielo se pinta de fondo: la que está más cerca de quedar
+    // asentada, para que el fondo cambie a la vez que el gradiente.
+    val backgroundCity by remember(state) {
         derivedStateOf {
             val index = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
                 .roundToInt()
                 .coerceIn(0, maxOf(0, state.locations.lastIndex))
-            WeatherEffect.fromSkyCode(state.cityAt(index)?.skyCode)
+            state.cityAt(index)
         }
+    }
+
+    val effect by remember(state) {
+        derivedStateOf { WeatherEffect.fromSkyCode(backgroundCity?.skyCode) }
+    }
+
+    val skyLayer by remember(state) {
+        derivedStateOf { SkyLayer.fromSkyCode(backgroundCity?.skyCode) }
     }
 
     Box(
@@ -133,7 +145,16 @@ fun WeatherScreen(
             .fillMaxSize()
             .background(Brush.verticalGradient(gradient.colors)),
     ) {
-        // La lluvia va entre el cielo y el contenido; las tarjetas la ocultan.
+        // Orden de capas: primero el cielo —nubes, estrellas, niebla— y encima
+        // lo que cae. Las dos van entre el gradiente y el contenido, así que
+        // las tarjetas las ocultan con su velo.
+        SkyLayerOverlay(
+            layer = skyLayer,
+            windSpeed = backgroundCity?.windSpeed,
+            windDegrees = backgroundCity?.windDegrees,
+            modifier = Modifier.fillMaxSize(),
+        )
+
         WeatherEffectsOverlay(effect, Modifier.fillMaxSize())
 
         // El gradiente y la lluvia ocupan toda la pantalla; el contenido se
@@ -190,7 +211,7 @@ fun WeatherScreen(
                     ) { page ->
                         val city = state.cityAt(page)
                         if (city != null) {
-                            CityPage(city = city, onRetry = { onRetry(city.municipioId) })
+                            CityPage(city = city, onRetry = { onRetry(city.locationId) })
                         }
                     }
                 }
@@ -347,16 +368,7 @@ private fun CityContent(city: CityWeather) {
             .padding(bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Outlined.LocationOn,
-                null,
-                tint = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(city.name, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.W500)
-        }
+        Text(city.name, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.W500)
 
         Text(
             city.currentTemperature?.let { "$it°" } ?: "--",
@@ -389,6 +401,7 @@ private fun CityContent(city: CityWeather) {
         HourlyView(
             forecasts = city.hourly,
             alerts = city.alerts,
+            nowThere = city.nowThere,
             modifier = Modifier.padding(horizontal = CARD_MARGIN),
         )
 
@@ -397,14 +410,32 @@ private fun CityContent(city: CityWeather) {
         DailyView(
             forecasts = city.daily,
             alerts = city.alerts,
+            today = city.nowThere.toLocalDate(),
             modifier = Modifier.padding(horizontal = CARD_MARGIN),
         )
+
+        // Antes del sol y la luna: las dos son la zona de datos consultables,
+        // por debajo del recorrido principal de temperatura, horas y días.
+        if (city.hasConditions) {
+            Spacer(Modifier.height(12.dp))
+            ConditionsCard(
+                airQualityIndex = city.airQualityIndex,
+                uvIndex = city.uvIndex,
+                humidity = city.humidity,
+                apparentTemperature = city.apparentTemperature,
+                temperature = city.currentTemperature,
+                modifier = Modifier.padding(horizontal = CARD_MARGIN),
+            )
+        }
 
         Spacer(Modifier.height(12.dp))
 
         SunMoonCard(
             sunTimes = city.sunTimes,
             moonData = city.moonData,
+            sunPath = city.sunPath,
+            moonPath = city.moonPath,
+            nowThere = city.nowThere,
             modifier = Modifier.padding(horizontal = CARD_MARGIN),
         )
     }

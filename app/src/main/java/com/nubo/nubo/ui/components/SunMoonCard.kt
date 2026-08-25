@@ -24,7 +24,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -33,9 +32,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nubo.nubo.domain.astro.MoonData
+import com.nubo.nubo.domain.astro.SkyPath
 import com.nubo.nubo.domain.astro.SunTimes
 import java.time.Duration
 import java.time.LocalDateTime
+import kotlin.math.PI
 import java.time.format.DateTimeFormatter
 
 /**
@@ -50,6 +51,11 @@ import java.time.format.DateTimeFormatter
 fun SunMoonCard(
     sunTimes: SunTimes?,
     moonData: MoonData?,
+    /** Trayectorias reales; ver `SkyPath`. Vacías, se cae a una curva suave. */
+    sunPath: List<Float>,
+    moonPath: List<Float>,
+    /** Hora local del sitio, contra la que se mide el trayecto recorrido. */
+    nowThere: LocalDateTime,
     modifier: Modifier = Modifier,
 ) {
     if (sunTimes == null) return
@@ -74,6 +80,8 @@ fun SunMoonCard(
             startLabel = sunTimes.sunrise.format(formatter),
             endLabel = sunTimes.sunset.format(formatter),
             arcColor = Color(0xFFFFB300),
+            now = nowThere,
+            path = sunPath,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
@@ -89,6 +97,8 @@ fun SunMoonCard(
                 startLabel = moonData.moonrise.format(formatter),
                 endLabel = moonData.moonset.format(formatter),
                 arcColor = Color(0xFF90A4AE),
+                now = nowThere,
+                path = moonPath,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
@@ -109,9 +119,11 @@ private fun ArcCard(
     startLabel: String,
     endLabel: String,
     arcColor: Color,
+    now: LocalDateTime,
+    path: List<Float>,
     modifier: Modifier = Modifier,
 ) {
-    val progress = progressBetween(start, end)
+    val progress = progressBetween(start, end, now)
 
     GlassCard(modifier = modifier, cornerRadius = 20.dp, contentPadding = 12.dp) {
         Column {
@@ -133,6 +145,7 @@ private fun ArcCard(
             Arc(
                 progress = progress,
                 color = arcColor,
+                path = path,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -155,32 +168,57 @@ private fun ArcCard(
  * Trayectoria del astro con el tramo recorrido resaltado y un punto en la
  * posición actual, al estilo de Breezy Weather.
  *
- * Es una parábola, no un semicírculo. El arco de circunferencia sale de los
- * extremos en vertical y engorda por los lados, que es lo que hacía que
- * pareciese un puente en vez de la trayectoria de un astro; la Bézier
- * cuadrática arranca inclinada y concentra la curvatura en el mediodía.
+ * La curva es la **altura real sobre el horizonte** hora a hora, muestreada en
+ * `SkyPath`. Antes era primero un semicírculo y luego una parábola, y ninguna
+ * de las dos es lo que hace el sol: la forma verdadera depende de la latitud y
+ * de la época del año, y por eso no puede ser una fórmula fija.
+ *
+ * El eje horizontal es el tiempo, así que el punto a mitad de la tarjeta es
+ * el mediodía solar y su altura es la que de verdad tiene el astro entonces.
  */
 @Composable
-private fun Arc(progress: Float, color: Color, modifier: Modifier = Modifier) {
+private fun Arc(
+    progress: Float,
+    color: Color,
+    path: List<Float>,
+    modifier: Modifier = Modifier,
+) {
     Canvas(modifier) {
         val stroke = 2.5.dp.toPx()
         val baseline = size.height - stroke
-        val start = Offset(stroke, baseline)
-        val end = Offset(size.width - stroke, baseline)
-
-        // En una Bézier cuadrática la curva pasa por la mitad de la altura del
-        // punto de control, así que se dobla para que la cima llegue arriba.
+        val left = stroke
+        val right = size.width - stroke
         val apex = baseline - stroke
-        val control = Offset(size.width / 2, baseline - apex * 2)
 
-        val path = Path().apply {
-            moveTo(start.x, start.y)
-            quadraticTo(control.x, control.y, end.x, end.y)
+        // Sin trayectoria —día polar, o datos aún sin calcular— se cae a una
+        // curva suave para no dejar la tarjeta vacía.
+        val heights = path.ifEmpty { FALLBACK_CURVE }
+
+        fun pointAt(fraction: Float): Offset {
+            val x = left + (right - left) * fraction.coerceIn(0f, 1f)
+            val y = baseline - apex * SkyPath.heightAt(heights, fraction)
+            return Offset(x, y)
+        }
+
+        fun buildPath(from: Float, to: Float): Path {
+            val result = Path()
+            val first = pointAt(from)
+            result.moveTo(first.x, first.y)
+
+            // Se recorre por muestras y no por el ancho en píxeles: son las
+            // muestras las que llevan la forma.
+            val steps = heights.size
+            for (i in 0..steps) {
+                val fraction = from + (to - from) * i / steps
+                val point = pointAt(fraction)
+                result.lineTo(point.x, point.y)
+            }
+            return result
         }
 
         // Trayecto completo, punteado y tenue.
         drawPath(
-            path = path,
+            path = buildPath(0f, 1f),
             color = color.copy(alpha = 0.28f),
             style = Stroke(
                 width = stroke,
@@ -191,26 +229,28 @@ private fun Arc(progress: Float, color: Color, modifier: Modifier = Modifier) {
 
         if (progress <= 0f) return@Canvas
 
-        // Se recorre por distancia, no por el parámetro de la Bézier: el
-        // parámetro avanza más deprisa en los extremos y el punto se
-        // adelantaría respecto a la hora real.
-        val measure = PathMeasure().apply { setPath(path, false) }
-        val travelled = measure.length * progress.coerceIn(0f, 1f)
-
-        val done = Path()
-        measure.getSegment(0f, travelled, done, true)
         drawPath(
-            path = done,
+            path = buildPath(0f, progress.coerceIn(0f, 1f)),
             color = color,
             style = Stroke(width = stroke, cap = StrokeCap.Round),
         )
 
         if (progress >= 1f) return@Canvas
 
-        val position = measure.getPosition(travelled)
+        val position = pointAt(progress)
         drawCircle(color, 4.dp.toPx(), position)
         drawCircle(Color.White, 1.5.dp.toPx(), position)
     }
+}
+
+/**
+ * Curva de reserva: media onda de seno.
+ *
+ * Solo se usa cuando no hay trayectoria que dibujar, y se parece bastante a
+ * la de un día de equinoccio en latitudes medias.
+ */
+private val FALLBACK_CURVE: List<Float> = List(SkyPath.SAMPLES) { i ->
+    kotlin.math.sin(PI * i / (SkyPath.SAMPLES - 1)).toFloat()
 }
 
 /** Fracción transcurrida entre dos instantes, acotada a 0..1. */

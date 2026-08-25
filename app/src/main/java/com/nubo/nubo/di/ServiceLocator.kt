@@ -8,7 +8,10 @@ import com.nubo.nubo.data.location.LocationService
 import com.nubo.nubo.data.remote.AemetApi
 import com.nubo.nubo.data.remote.AlertService
 import com.nubo.nubo.data.remote.HttpClient
-import com.nubo.nubo.data.remote.MunicipioSearchService
+import com.nubo.nubo.data.remote.AemetZoneService
+import com.nubo.nubo.data.remote.AirQualityApi
+import com.nubo.nubo.data.remote.GeocodingApi
+import com.nubo.nubo.data.remote.ReverseGeocodingApi
 import com.nubo.nubo.data.remote.OpenMeteoApi
 import com.nubo.nubo.data.remote.UpdateService
 import com.nubo.nubo.data.repository.AlertRepository
@@ -35,11 +38,15 @@ object ServiceLocator {
     private val http by lazy { HttpClient() }
     private val aemetApi by lazy { AemetApi(http) }
 
-    val municipioSearchService: MunicipioSearchService by lazy {
-        MunicipioSearchService(aemetApi)
-    }
+    // El maestro de AEMET se descarga una vez y hay que compartirlo entre la
+    // interfaz y el worker, de ahí que viva aquí y no en el repositorio.
+    val aemetZoneService: AemetZoneService by lazy { AemetZoneService(aemetApi) }
+
+    private val geocodingApi by lazy { GeocodingApi(http) }
+    private val reverseGeocodingApi by lazy { ReverseGeocodingApi(http) }
 
     private val openMeteoApi by lazy { OpenMeteoApi(http) }
+    private val airQualityApi by lazy { AirQualityApi(http) }
 
     @Volatile
     private var storage: WeatherStorage? = null
@@ -50,14 +57,14 @@ object ServiceLocator {
         }
 
     fun locationRepository(context: Context): LocationRepository = LocationRepositoryImpl(
-        searchService = municipioSearchService,
+        geocoding = geocodingApi,
+        reverseGeocoding = reverseGeocodingApi,
+        zoneService = aemetZoneService,
         locationService = LocationService(context.applicationContext),
     )
 
-    fun weatherRepository(context: Context): WeatherRepository = WeatherRepositoryImpl(
-        locationRepository = locationRepository(context),
-        api = openMeteoApi,
-    )
+    fun weatherRepository(): WeatherRepository =
+        WeatherRepositoryImpl(openMeteoApi, airQualityApi)
 
     // Necesita el repositorio de ubicaciones para resolver la zona de aviso
     // del municipio, y ese sí depende del contexto.
@@ -76,7 +83,7 @@ object ServiceLocator {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val appContext = context.applicationContext
                 return WeatherViewModel(
-                    weatherRepository = weatherRepository(appContext),
+                    weatherRepository = weatherRepository(),
                     alertRepository = alertRepository(appContext),
                     locationRepository = locationRepository(appContext),
                     storage = weatherStorage(appContext),

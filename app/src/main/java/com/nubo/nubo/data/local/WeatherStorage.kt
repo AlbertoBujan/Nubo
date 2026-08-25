@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.nubo.nubo.domain.astro.SunTimes
+import com.nubo.nubo.domain.model.AirQualityForecast
 import com.nubo.nubo.domain.model.DailyForecast
 import com.nubo.nubo.domain.model.HourlyForecast
 import com.nubo.nubo.domain.model.SavedLocation
@@ -25,6 +26,7 @@ data class CachedWeather(
     val alerts: List<WeatherAlert>,
     val sunTimes: SunTimes?,
     val lastUpdated: LocalDateTime,
+    val airQuality: List<AirQualityForecast> = emptyList(),
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "nubo")
@@ -81,8 +83,8 @@ class WeatherStorage(private val context: Context) {
 
     // ── Predicción por municipio ─────────────────────────────────────────────
 
-    suspend fun loadWeather(municipioId: String): CachedWeather? {
-        val json = store.data.first()[weatherKey(municipioId)] ?: return null
+    suspend fun loadWeather(locationId: String): CachedWeather? {
+        val json = store.data.first()[weatherKey(locationId)] ?: return null
 
         return try {
             val decoded = JSONObject(json)
@@ -94,23 +96,31 @@ class WeatherStorage(private val context: Context) {
                 alerts = decoded.optJSONArray("alerts").toAlerts(),
                 sunTimes = decoded.optJSONObject("sunTimes")?.toSunTimes(),
                 lastUpdated = LocalDateTime.parse(decoded.getString("lastUpdated")),
+                // Ausente en las cachés escritas antes de que existiera la
+                // tarjeta de condiciones: se queda vacía y se rellena en el
+                // primer refresco.
+                airQuality = decoded.optJSONObject("airQuality")
+                    ?.let { AirQualityForecast.fromOpenMeteoJson(it) }
+                    .orEmpty(),
             )
         } catch (_: Exception) {
             // Una caché ilegible se descarta en vez de arrastrarse.
-            removeWeather(municipioId)
+            removeWeather(locationId)
             null
         }
     }
 
     suspend fun saveWeather(
-        municipioId: String,
+        locationId: String,
         rawJson: JSONObject,
         alerts: List<WeatherAlert>,
         sunTimes: SunTimes?,
         updatedAt: LocalDateTime,
+        airQualityJson: JSONObject? = null,
     ) {
         val payload = JSONObject().apply {
             put("openMeteo", rawJson)
+            put("airQuality", airQualityJson ?: JSONObject.NULL)
             put("alerts", JSONArray().apply { alerts.forEach { put(it.toJson()) } })
             put(
                 "sunTimes",
@@ -124,11 +134,11 @@ class WeatherStorage(private val context: Context) {
             put("lastUpdated", updatedAt.toString())
         }
 
-        store.edit { prefs -> prefs[weatherKey(municipioId)] = payload.toString() }
+        store.edit { prefs -> prefs[weatherKey(locationId)] = payload.toString() }
     }
 
-    suspend fun removeWeather(municipioId: String) {
-        store.edit { prefs -> prefs.remove(weatherKey(municipioId)) }
+    suspend fun removeWeather(locationId: String) {
+        store.edit { prefs -> prefs.remove(weatherKey(locationId)) }
     }
 
     // ── Preferencia de actualización en segundo plano ────────────────────────
@@ -144,8 +154,8 @@ class WeatherStorage(private val context: Context) {
         val LOCATIONS_KEY = stringSetPreferencesKey("saved_locations")
         val BACKGROUND_INTERVAL_KEY = intPreferencesKey("bg_update_interval")
 
-        fun weatherKey(municipioId: String) =
-            stringPreferencesKey("weather_data_$municipioId")
+        fun weatherKey(locationId: String) =
+            stringPreferencesKey("weather_data_$locationId")
 
         fun JSONArray?.toAlerts(): List<WeatherAlert> {
             if (this == null) return emptyList()

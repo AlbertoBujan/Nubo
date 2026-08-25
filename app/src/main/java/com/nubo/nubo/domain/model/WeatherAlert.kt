@@ -47,9 +47,15 @@ data class WeatherAlert(
     val nivelDisplay: String
         get() = nivel.replaceFirstChar { it.uppercase() }
 
-    /** Un aviso ya caducado no se muestra. */
-    val isActiveOrUpcoming: Boolean
-        get() = expires == null || !expires.isBefore(LocalDateTime.now())
+    /**
+     * Un aviso ya caducado no se muestra.
+     *
+     * El "ahora" se recibe porque las horas del aviso están en la zona del
+     * sitio: comparar con el reloj del teléfono caducaba avisos antes de
+     * tiempo, o los alargaba, en cuanto quien mira está en otro huso.
+     */
+    fun isActiveAt(now: LocalDateTime): Boolean =
+        expires == null || !expires.isBefore(now)
 
     /** Comprueba si el aviso solapa con el intervalo dado. */
     fun overlaps(from: LocalDateTime, to: LocalDateTime): Boolean {
@@ -87,13 +93,14 @@ data class WeatherAlert(
         /**
          * Acepta tanto marcas con huso (las del CAP de AEMET, p. ej.
          * `2026-08-24T12:00:00+02:00`) como las locales que escribe [toJson].
-         * Las primeras se convierten a la hora del dispositivo.
+         * Las primeras se convierten a [zone], la del sitio del aviso, para
+         * que casen con las horas de la predicción.
          */
-        fun parseDateTime(raw: String?): LocalDateTime? {
+        fun parseDateTime(raw: String?, zone: ZoneId = ZoneId.systemDefault()): LocalDateTime? {
             if (raw.isNullOrBlank() || raw == "null") return null
             return try {
                 OffsetDateTime.parse(raw)
-                    .atZoneSameInstant(ZoneId.systemDefault())
+                    .atZoneSameInstant(zone)
                     .toLocalDateTime()
             } catch (_: DateTimeParseException) {
                 try {

@@ -24,6 +24,7 @@ import com.nubo.nubo.di.ServiceLocator
 import com.nubo.nubo.ui.theme.NuboTheme
 import com.nubo.nubo.ui.weather.AppDrawer
 import com.nubo.nubo.ui.weather.SearchLocationSheet
+import com.nubo.nubo.ui.weather.SettingsSheet
 import com.nubo.nubo.ui.weather.UpdateDialog
 import com.nubo.nubo.ui.weather.AboutDialog
 import com.nubo.nubo.ui.weather.WeatherScreen
@@ -76,6 +77,7 @@ private fun NuboApp(requestLocationPermission: ((Boolean) -> Unit) -> Unit) {
     val scope = rememberCoroutineScope()
 
     var showSearch by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<AvailableUpdate?>(null) }
 
@@ -110,25 +112,15 @@ private fun NuboApp(requestLocationPermission: ((Boolean) -> Unit) -> Unit) {
                     scope.launch { drawerState.close() }
                 },
                 onRemoveCity = viewModel::removeLocation,
+                onUndoRemove = viewModel::undoRemove,
+                onMoveCity = viewModel::moveLocation,
                 onAddLocation = {
                     showSearch = true
                     scope.launch { drawerState.close() }
                 },
-                onRefreshAll = {
-                    viewModel.refreshAll()
-                    scope.launch { drawerState.close() }
-                },
-                onIntervalChange = viewModel::setBackgroundInterval,
-                onCheckUpdates = {
-                    scope.launch {
-                        update = updateService.checkForUpdates()
-                        drawerState.close()
-                    }
-                },
-                onShowAbout = {
-                    showAbout = true
-                    scope.launch { drawerState.close() }
-                },
+                // Los ajustes se abren **sobre** el menú, sin cerrarlo: al
+                // volver de ellos se sigue viendo la lista de ubicaciones.
+                onOpenSettings = { showSettings = true },
             )
         },
     ) {
@@ -148,7 +140,9 @@ private fun NuboApp(requestLocationPermission: ((Boolean) -> Unit) -> Unit) {
             results = state.searchResults,
             isSearching = state.isSearching,
             isLocating = state.isLocating,
+            nearby = state.searchNearby,
             onQueryChange = viewModel::search,
+            onNearbyChange = viewModel::setSearchNearby,
             onSelect = { location ->
                 viewModel.addLocation(location)
                 viewModel.clearSearch()
@@ -170,6 +164,25 @@ private fun NuboApp(requestLocationPermission: ((Boolean) -> Unit) -> Unit) {
             update = available,
             onDismiss = { update = null },
             onInstall = { onProgress -> updateService.downloadAndInstall(available.downloadUrl, onProgress) },
+        )
+    }
+
+    if (showSettings) {
+        SettingsSheet(
+            interval = state.backgroundInterval,
+            onIntervalChange = viewModel::setBackgroundInterval,
+            onCheckUpdates = {
+                showSettings = false
+                scope.launch {
+                    update = updateService.checkForUpdates()
+                    drawerState.close()
+                }
+            },
+            onShowAbout = {
+                showSettings = false
+                showAbout = true
+            },
+            onDismiss = { showSettings = false },
         )
     }
 

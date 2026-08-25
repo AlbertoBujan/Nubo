@@ -87,6 +87,24 @@ internal object SunCalc {
         return SunCoords(dec = declination(l, 0.0), ra = rightAscension(l, 0.0))
     }
 
+    /**
+     * Altitud del sol sobre el horizonte, en radianes.
+     *
+     * Es lo que dibuja la trayectoria de la tarjeta del sol: su forma depende
+     * de la latitud y de la época del año, y por eso no puede ser una curva
+     * fija. En junio en Galicia el sol sube casi vertical y se queda alto; en
+     * diciembre describe un montículo bajo. Sin refracción, a diferencia de
+     * [moonAltitude]: aquí interesa la geometría, no cuándo se ve asomar.
+     */
+    fun sunAltitude(instant: Instant, lat: Double, lng: Double): Double {
+        val lw = RAD * -lng
+        val phi = RAD * lat
+        val d = toDays(instant)
+        val c = sunCoords(d)
+        val h = siderealTime(d, lw) - c.ra
+        return altitude(h, phi, c.dec)
+    }
+
     // ── Amanecer y atardecer ─────────────────────────────────────────────────
 
     private const val J0 = 0.0009

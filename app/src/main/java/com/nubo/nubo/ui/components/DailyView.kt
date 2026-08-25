@@ -35,6 +35,8 @@ import java.util.Locale
 fun DailyView(
     forecasts: List<DailyForecast>,
     alerts: List<WeatherAlert>,
+    /** Día de hoy en el sitio, que no tiene por qué ser el del teléfono. */
+    today: LocalDate,
     modifier: Modifier = Modifier,
 ) {
     if (forecasts.isEmpty()) return
@@ -56,6 +58,7 @@ fun DailyView(
                 alerts = alerts,
                 globalMin = globalMin,
                 globalMax = globalMax,
+                today = today,
             )
             Spacer(Modifier.height(6.dp))
         }
@@ -68,8 +71,9 @@ private fun DailyRow(
     alerts: List<WeatherAlert>,
     globalMin: Int,
     globalMax: Int,
+    today: LocalDate,
 ) {
-    val isToday = forecast.date == LocalDate.now()
+    val isToday = forecast.date == today
 
     // Color del aviso más grave que solapa con este día, si lo hay.
     val alertColor = remember(forecast, alerts) {
@@ -99,7 +103,7 @@ private fun DailyRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = dayLabel(forecast.date),
+                    text = dayLabel(forecast.date, today),
                     color = if (isToday) Color.White else Color.White.copy(alpha = 0.75f),
                     fontSize = 15.sp,
                     fontWeight = if (isToday) FontWeight.W600 else FontWeight.Normal,
@@ -170,8 +174,7 @@ private fun DailyRow(
 /** Diámetro del punto de aviso de la fila diaria. */
 private val ALERT_DOT_SIZE = 9.dp
 
-private fun dayLabel(date: LocalDate): String {
-    val today = LocalDate.now()
+private fun dayLabel(date: LocalDate, today: LocalDate): String {
     return when (date) {
         today -> "Hoy"
         today.plusDays(1) -> "Mañana"

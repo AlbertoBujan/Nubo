@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,23 +37,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import com.nubo.nubo.domain.geo.formatDistance
 import com.nubo.nubo.domain.model.SavedLocation
 
 /** Hoja inferior para buscar y añadir municipios. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchLocationSheet(
-    results: List<SavedLocation>,
+    results: List<SearchResult>,
     isSearching: Boolean,
     isLocating: Boolean,
+    nearby: Boolean,
     onQueryChange: (String) -> Unit,
+    onNearbyChange: (Boolean) -> Unit,
     onSelect: (SavedLocation) -> Unit,
     onUseCurrentLocation: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    // Al reordenar por cercanía, `LazyColumn` deja anclado el elemento que
+    // estaba arriba, así que los resultados nuevos —los cercanos— aparecen
+    // por encima del borde visible y parece que no ha pasado nada. Volver al
+    // principio en cada cambio de lista es además lo que se espera de una
+    // búsqueda.
+    LaunchedEffect(results) {
+        if (results.isNotEmpty()) listState.scrollToItem(0)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -90,64 +108,128 @@ fun SearchLocationSheet(
 
             Spacer(Modifier.height(8.dp))
 
-            TextButton(
-                onClick = onUseCurrentLocation,
-                enabled = !isLocating,
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Icon(Icons.Outlined.MyLocation, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(if (isLocating) "Localizando…" else "Usar mi ubicación actual")
+                TextButton(
+                    onClick = onUseCurrentLocation,
+                    enabled = !isLocating,
+                ) {
+                    Icon(Icons.Outlined.MyLocation, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isLocating) "Localizando…" else "Usar mi ubicación actual")
+                }
+
+                // Va apagado por defecto a propósito: ordenar por cercanía
+                // estorba cuando lo que buscas está lejos —desde España,
+                // "Tokio" tiene más cerca el de Dakota del Norte que el de
+                // Japón—, y solo lo enciendes cuando buscas algo de tu zona.
+                Row(
+                    Modifier.clickable { onNearbyChange(!nearby) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Sin `onCheckedChange` el checkbox no responde por su
+                    // cuenta: pulsarlo disparaba dos veces —una él y otra la
+                    // fila— y el segundo evento deshacía el primero.
+                    Checkbox(
+                        checked = nearby,
+                        onCheckedChange = null,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = Color(0xFF64B5F6),
+                            uncheckedColor = Color.White.copy(alpha = 0.5f),
+                        ),
+                    )
+                    Text(
+                        "Cerca de mí",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 14.sp,
+                    )
+                }
             }
 
             Spacer(Modifier.height(8.dp))
 
-            when {
-                isSearching -> Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(80.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = Color.White.copy(alpha = 0.8f))
-                }
+            // Alto fijo en cuanto hay algo escrito. Si la caja se ajustase a
+            // su contenido, la hoja daría un salto con cada tecla: las tres
+            // ramas miden distinto y además el número de resultados cambia a
+            // cada carácter. Con la consulta vacía se pliega del todo para no
+            // dejar un hueco muerto al abrir.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(if (query.isBlank()) 0.dp else RESULTS_HEIGHT),
+            ) {
+                when {
+                    isSearching -> Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(color = Color.White.copy(alpha = 0.8f))
+                    }
 
-                query.isNotBlank() && results.isEmpty() -> Text(
-                    "Sin resultados para \"$query\"",
-                    color = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(vertical = 24.dp),
-                )
+                    results.isEmpty() -> Text(
+                        "Sin resultados para \"$query\"",
+                        color = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(vertical = 24.dp),
+                    )
 
-                else -> LazyColumn(
-                    modifier = Modifier.heightIn(max = 320.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    items(results, key = { it.municipioId }) { location ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(location) }
-                                .padding(vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Outlined.LocationOn,
-                                null,
-                                tint = Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                location.nombre,
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Icon(
-                                Icons.Filled.Add,
-                                "Añadir",
-                                tint = Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(20.dp),
-                            )
+                    else -> LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        items(results, key = { it.location.locationId }) { result ->
+                            val location = result.location
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelect(location) }
+                                    .padding(vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Outlined.LocationOn,
+                                    null,
+                                    tint = Color.White.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                // La región va debajo porque la búsqueda es
+                                // mundial: "Curtis" son dos sitios, uno en A
+                                // Coruña y otro en Nebraska, y sin esto las dos
+                                // filas serían idénticas.
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        location.nombre,
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                    )
+                                    // La distancia se cuelga de la región para
+                                    // que se vea de dónde sale el orden.
+                                    val subtitle = listOfNotNull(
+                                        location.region,
+                                        result.distanceKm?.let { formatDistance(it) },
+                                    ).joinToString(" · ")
+
+                                    if (subtitle.isNotBlank()) {
+                                        Text(
+                                            subtitle,
+                                            color = Color.White.copy(alpha = 0.55f),
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    Icons.Filled.Add,
+                                    "Añadir",
+                                    tint = Color.White.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -155,3 +237,11 @@ fun SearchLocationSheet(
         }
     }
 }
+
+/**
+ * Alto reservado para los resultados.
+ *
+ * Da para unas cinco filas; el resto se ven haciendo scroll dentro de la
+ * caja, sin que la hoja cambie de tamaño.
+ */
+private val RESULTS_HEIGHT = 320.dp
