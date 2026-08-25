@@ -103,16 +103,7 @@ fun WeatherEffectsOverlay(
         }
     }
 
-    val flashes = remember {
-        val random = Random(23)
-        buildList {
-            var t = 2f + random.nextFloat() * 4f
-            while (t < CYCLE_SECONDS - 1) {
-                add(t)
-                t += 3f + random.nextFloat() * 5f // un destello cada 3-8 s
-            }
-        }
-    }
+    val flashes = remember { flashTimes() }
 
     var elapsed by remember { mutableFloatStateOf(0f) }
     var intensity by remember { mutableFloatStateOf(if (effect == WeatherEffect.NONE) 0f else 1f) }
@@ -152,7 +143,7 @@ fun WeatherEffectsOverlay(
 
     Canvas(modifier = modifier.fillMaxSize()) {
         if (flashAlpha > 0f) {
-            drawRect(color = Color(0xFFEAF2FF).copy(alpha = flashAlpha * 0.5f))
+            drawRect(color = Color(0xFFEAF2FF).copy(alpha = flashAlpha * MAX_FLASH_ALPHA))
         }
 
         for (drop in drops) {
@@ -189,12 +180,29 @@ fun WeatherEffectsOverlay(
 }
 
 /**
+ * Instantes en los que cae un relámpago dentro de un ciclo del ticker.
+ *
+ * La semilla es fija para que el patrón sea el mismo en cada ciclo y no haya
+ * que guardar estado entre fotogramas.
+ */
+internal fun flashTimes(seed: Int = 23): List<Float> {
+    val random = Random(seed)
+    return buildList {
+        var t = FIRST_FLASH_SECONDS + random.nextFloat() * FLASH_GAP_SPREAD
+        while (t < CYCLE_SECONDS - 1) {
+            add(t)
+            t += MIN_FLASH_GAP_SECONDS + random.nextFloat() * FLASH_GAP_SPREAD
+        }
+    }
+}
+
+/**
  * Opacidad del destello en un instante.
  *
  * Cada relámpago dura 300 ms y describe un doble pico —brilla, cae, vuelve a
  * brillar más fuerte y se apaga—, que es como se percibe una descarga real.
  */
-private fun flashAlphaAt(elapsed: Float, flashes: List<Float>): Float {
+internal fun flashAlphaAt(elapsed: Float, flashes: List<Float>): Float {
     for (start in flashes) {
         val t = elapsed - start
         if (t < 0f || t > 0.3f) continue
@@ -219,6 +227,24 @@ private const val SWAY_WIDTH = 0.02f
 
 /** Periodo del ciclo del ticker; los destellos se reparten dentro. */
 private const val CYCLE_SECONDS = 60f
+
+/**
+ * Ritmo e intensidad de los relámpagos.
+ *
+ * Iban cada 3-8 s y llegaban al 50 % de blanco. Se ve muy bien, pero una
+ * pantalla que fogonazea cada pocos segundos cansa, y a quien tenga
+ * sensibilidad a los destellos le molesta de verdad. Con una cada 9-20 s el
+ * efecto sigue leyéndose como tormenta sin convertirse en un parpadeo
+ * constante, y bajando el velo a la mitad el destello se insinúa en lugar de
+ * blanquear la pantalla.
+ *
+ * El primero se retrasa además para que abrir una ciudad con tormenta no
+ * reciba con un fogonazo.
+ */
+internal const val FIRST_FLASH_SECONDS = 5f
+internal const val MIN_FLASH_GAP_SECONDS = 9f
+internal const val FLASH_GAP_SPREAD = 11f
+internal const val MAX_FLASH_ALPHA = 0.26f
 
 /** Lo que tarda un cambio de fenómeno en entrar o salir del todo. */
 private const val FADE_SECONDS = 1.2f

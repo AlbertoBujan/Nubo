@@ -1,8 +1,9 @@
 package com.nubo.nubo.ui.components
 
+import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateTo
 import androidx.compose.animation.core.calculateTargetValue
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
@@ -10,7 +11,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -41,6 +44,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +54,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nubo.nubo.domain.model.HourlyForecast
@@ -55,6 +62,7 @@ import com.nubo.nubo.domain.model.WeatherAlert
 import com.nubo.nubo.domain.weather.WeatherCode
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -126,19 +134,42 @@ fun HourlyView(
             Spacer(Modifier.height(16.dp))
 
             BoxWithConstraints {
-                val itemWidth = maxWidth / VISIBLE_HOURS
-                val blockPx = with(LocalDensity.current) {
-                    (itemWidth * VISIBLE_HOURS).toPx()
-                }
+                // El ancho de columna se redondea a **píxeles enteros**, que es
+                // lo que hace el layout al medirla, y de ahí sale el bloque.
+                // Calculándolo en `Dp` el bloque salía 1160 px mientras las seis
+                // columnas medían 1158: dos píxeles de desfase por bloque que
+                // desalineaban el carrusel a los pocos gestos.
+                val density = LocalDensity.current
+                val itemPx = columnWidthPx(with(density) { maxWidth.toPx() })
+                val itemWidth = with(density) { itemPx.toDp() }
+                val blockPx = itemPx * VISIBLE_HOURS
+                val blockWidth = itemWidth * VISIBLE_HOURS
 
-                Column {
-                    Row(
-                        Modifier
-                            .horizontalScroll(
-                                state = scrollState,
-                                flingBehavior = rememberBlockFling(scrollState, blockPx),
-                            ),
-                    ) {
+                // El gesto vive en toda la tarjeta y no solo en la fila de
+                // columnas: el gráfico ocupa la mitad de abajo y está fuera
+                // del área desplazable, así que arrastrando sobre él no
+                // pasaba nada.
+                Column(
+                    Modifier
+                        // Justo un bloque de ancho. Con la holgura sobrante de
+                        // la tarjeta, el tope del scroll caía a media columna
+                        // del último bloque y no se llegaba a encajar.
+                        .width(blockWidth)
+                        .nestedScroll(StayInsideCard)
+                        .scrollable(
+                            state = scrollState,
+                            orientation = Orientation.Horizontal,
+                            flingBehavior = rememberBlockFling(scrollState, blockPx),
+                            // Arrastrar hacia la izquierda avanza en el tiempo,
+                            // igual que hace `horizontalScroll` por dentro.
+                            reverseDirection = true,
+                        ),
+                ) {
+                    // Desplaza el contenido pero **no** captura el gesto: de
+                    // eso se encarga la columna entera. Con las dos activas,
+                    // arrastrar sobre las horas y arrastrar sobre el gráfico
+                    // serían dos gestos distintos sobre el mismo estado.
+                    Row(Modifier.horizontalScroll(scrollState, enabled = false)) {
                         hours.forEachIndexed { index, forecast ->
                             HourColumn(
                                 forecast = forecast,
@@ -159,13 +190,37 @@ fun HourlyView(
                         itemWidth = itemWidth,
                         scroll = scrollState.value,
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .width(blockWidth)
                             .height(CHART_HEIGHT),
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * Se queda con todo el desplazamiento horizontal que sobra dentro de la
+ * tarjeta, sin dejarlo subir al carrusel de ciudades.
+ *
+ * Sin esto, al llegar al principio o al final de las horas el resto del gesto
+ * pasaba al `HorizontalPager` y **cambiaba de ciudad**: los dos deslizamientos
+ * son el mismo movimiento del dedo y colisionan justo en los extremos, que es
+ * donde uno esperaría que simplemente no pasara nada.
+ *
+ * Solo se consume la componente horizontal. La vertical se deja pasar entera
+ * porque es la que hace correr la página.
+ */
+private val StayInsideCard = object : NestedScrollConnection {
+
+    override fun onPostScroll(
+        consumed: Offset,
+        available: Offset,
+        source: NestedScrollSource,
+    ): Offset = Offset(available.x, 0f)
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+        Velocity(available.x, 0f)
 }
 
 /**
@@ -204,20 +259,29 @@ private class BlockFlingBehavior(
             maxScroll = scrollState.maxValue.toFloat(),
         )
 
+        // Ya está donde tiene que estar: no hay nada que animar. Y sobre todo,
+        // no se le puede pasar la velocidad del dedo a un muelle que no tiene
+        // recorrido. En los extremos, ese muelle se lanzaba más allá del tope,
+        // el `scrollBy` se comía el tramo imposible, y al volver sí movía: un
+        // gesto contra el principio de la lista dejaba el carrusel casi una
+        // columna adentro.
+        if (target == current) return 0f
+
         var last = current
-        animate(
-            initialValue = current,
+        AnimationState(initialValue = current, initialVelocity = initialVelocity).animateTo(
             targetValue = target,
-            initialVelocity = initialVelocity,
             // Muelle sin rebote: recoge la velocidad del dedo, así que el
             // frenado no da un tirón al empezar la animación.
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMediumLow,
             ),
-        ) { value, _ ->
-            scrollBy(value - last)
+        ) {
+            val delta = value - last
             last = value
+            // Si el muelle se pasa de largo y el scroll no puede seguirle, se
+            // corta aquí en vez de dejar que la vuelta arrastre el contenido.
+            if (abs(scrollBy(delta) - delta) > 0.5f) cancelAnimation()
         }
         return 0f
     }
@@ -689,3 +753,19 @@ internal fun blockTarget(
         )
     return (block * blockWidth).coerceIn(0f, maxScroll)
 }
+
+/**
+ * Ancho de una columna, en píxeles enteros, para una tarjeta de [viewportPx].
+ *
+ * Se trunca a propósito. El layout mide cada columna redondeando su `Dp` a
+ * píxeles, así que si el bloque se calcula aparte en `Dp` los dos números no
+ * coinciden: con una tarjeta de 1160 px salían columnas de 193 y un bloque de
+ * 1160, cuando seis columnas miden 1158. Dos píxeles por bloque que a los
+ * pocos gestos dejaban el carrusel a media columna.
+ *
+ * La ventana visible se fija después a seis de estas columnas, no al ancho de
+ * la tarjeta, para que el recorrido total sea un número entero de bloques y el
+ * último se pueda alcanzar.
+ */
+internal fun columnWidthPx(viewportPx: Float, visibleHours: Int = VISIBLE_HOURS): Float =
+    floor(viewportPx / visibleHours).coerceAtLeast(1f)
