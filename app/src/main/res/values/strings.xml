@@ -1,4 +1,196 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Idioma por defecto: inglés.
+
+  Es la reserva para cualquier idioma que no tenga su propia carpeta, así que
+  conviene que sea el más entendible fuera de aquí. El español vive en
+  `values-es/`, no aquí, aunque sea el idioma en el que se escribió la app.
+-->
 <resources>
-    <string name="app_name">Nubo</string>
+    <!-- La marca no se traduce. -->
+    <string name="app_name" translatable="false">Nubo</string>
+
+    <!-- Pantalla principal -->
+    <string name="menu">Menu</string>
+    <string name="now">Now</string>
+    <string name="today">Today</string>
+    <string name="tomorrow">Tomorrow</string>
+    <string name="high_low">High: %1$s   Low: %2$s</string>
+    <string name="no_value" translatable="false">--</string>
+    <string name="loading_city">Loading %1$s…</string>
+    <string name="no_data_for">No data for %1$s</string>
+    <string name="retry">Retry</string>
+    <string name="download_data">Download data</string>
+    <string name="welcome_title">Welcome to Nubo!</string>
+    <string name="welcome_body">To get started, add your first location.</string>
+    <string name="add_location">Add location</string>
+    <string name="locating">Locating…</string>
+
+    <!-- Frescura de los datos -->
+    <string name="updated">Updated</string>
+    <string name="updated_minutes_ago">%1$d min ago</string>
+    <string name="updated_hours_ago">%1$d h ago</string>
+    <string name="updated_days_ago">%1$d d ago</string>
+
+    <!-- Tarjetas -->
+    <string name="next_hours">Next hours</string>
+    <string name="next_days">Next days</string>
+    <string name="sun">Sun</string>
+    <string name="expand">Expand</string>
+    <string name="collapse">Collapse</string>
+    <string name="air_quality">Air quality</string>
+    <string name="uv_max">Max UV</string>
+    <string name="humidity_mean">Mean humidity</string>
+    <string name="apparent">Feels like</string>
+    <string name="apparent_range">%1$s to %2$s</string>
+    <!-- En inglés el símbolo va pegado; en español lleva espacio. -->
+    <string name="percent">%1$d%%</string>
+
+    <!-- Menú lateral -->
+    <string name="drawer_gestures">Swipe to delete · Hold to reorder</string>
+    <string name="swipe_to_delete">Swipe to delete</string>
+    <string name="release_to_delete">Release to delete</string>
+    <string name="delete_named">Delete %1$s</string>
+    <string name="location_removed">%1$s removed</string>
+    <string name="location_removed_generic">Location removed</string>
+    <string name="undo">Undo</string>
+
+    <!-- Ajustes -->
+    <string name="back">Back</string>
+    <string name="settings">Settings</string>
+    <string name="background_updates">Background updates</string>
+    <string name="background_updates_hint">How often Nubo downloads the forecast without opening the app.</string>
+    <string name="interval_off">Off</string>
+    <string name="interval_12h">Every 12 hours</string>
+    <string name="interval_24h">Every 24 hours</string>
+    <string name="application">Application</string>
+    <string name="check_updates">Check for updates</string>
+    <string name="about_nubo">About Nubo</string>
+    <string name="version_label">Version %1$s</string>
+    <string name="close">Close</string>
+
+    <!-- Actualización de la app -->
+    <string name="update_available">New update!</string>
+    <string name="update_body">Nubo %1$s is available. Download and install it now?</string>
+    <string name="update_downloading">Downloading update…</string>
+    <string name="update_now">Update</string>
+    <string name="update_later">Later</string>
+
+    <!-- Búsqueda -->
+    <string name="search_location">Search location</string>
+    <string name="search_hint">Type a place…</string>
+    <string name="use_my_location">Use my current location</string>
+    <string name="search_nearby">Near me</string>
+    <string name="no_results_for">No results for \"%1$s\"</string>
+    <string name="add">Add</string>
+
+    <!-- Avisos -->
+    <string name="warnings">Weather warnings</string>
+    <string name="alert_wind">Wind</string>
+    <string name="alert_coastal">Coastal</string>
+    <string name="alert_rain">Rain</string>
+    <string name="alert_snow">Snow</string>
+    <string name="alert_thunderstorm">Thunderstorm</string>
+    <string name="alert_temperature">Temperatures</string>
+    <string name="alert_fog">Fog</string>
+    <string name="alert_dust">Airborne dust</string>
+    <string name="alert_avalanche">Avalanches</string>
+    <string name="alert_thaw">Thaw</string>
+    <string name="level_yellow">Yellow</string>
+    <string name="level_orange">Orange</string>
+    <string name="level_red">Red</string>
+
+    <!-- Errores -->
+    <string name="error_network">Could not reach the server. Check your connection.</string>
+    <string name="error_server">The weather service failed (code %1$d).</string>
+    <string name="error_unreadable">The weather service sent an unreadable response.</string>
+    <string name="error_no_coordinates">No coordinates found for this location.</string>
+    <string name="error_location">Could not get your location.</string>
+    <string name="error_location_timeout">Could not get your location in time. Make sure location is on and try again outdoors.</string>
+    <string name="error_location_permission">Location permission denied.</string>
+    <string name="error_unknown">Something went wrong.</string>
+
+    <!-- Calidad del aire -->
+    <string name="aqi_good">Good</string>
+    <string name="aqi_fair">Fair</string>
+    <string name="aqi_moderate">Moderate</string>
+    <string name="aqi_poor">Poor</string>
+    <string name="aqi_very_poor">Very poor</string>
+    <string name="aqi_extreme">Extreme</string>
+
+    <!-- Índice ultravioleta -->
+    <string name="uv_low">Low</string>
+    <string name="uv_moderate">Moderate</string>
+    <string name="uv_high">High</string>
+    <string name="uv_very_high">Very high</string>
+    <string name="uv_extreme">Extreme</string>
+
+    <!-- Fases lunares -->
+    <string name="moon_new">New moon</string>
+    <string name="moon_waxing_crescent">Waxing crescent</string>
+    <string name="moon_first_quarter">First quarter</string>
+    <string name="moon_waxing_gibbous">Waxing gibbous</string>
+    <string name="moon_full">Full moon</string>
+    <string name="moon_waning_gibbous">Waning gibbous</string>
+    <string name="moon_last_quarter">Last quarter</string>
+    <string name="moon_waning_crescent">Waning crescent</string>
+
+    <!-- Estado del cielo -->
+    <string name="sky_clear">Clear</string>
+    <string name="sky_mostly_clear">Mostly clear</string>
+    <string name="sky_partly_cloudy">Partly cloudy</string>
+    <string name="sky_overcast">Overcast</string>
+    <string name="sky_fog">Fog</string>
+    <string name="sky_rime_fog">Rime fog</string>
+    <string name="sky_drizzle_light">Light drizzle</string>
+    <string name="sky_drizzle">Drizzle</string>
+    <string name="sky_drizzle_dense">Dense drizzle</string>
+    <string name="sky_freezing_drizzle_light">Light freezing drizzle</string>
+    <string name="sky_freezing_drizzle_dense">Dense freezing drizzle</string>
+    <string name="sky_rain_light">Light rain</string>
+    <string name="sky_rain">Rain</string>
+    <string name="sky_rain_heavy">Heavy rain</string>
+    <string name="sky_freezing_rain_light">Light freezing rain</string>
+    <string name="sky_freezing_rain_heavy">Heavy freezing rain</string>
+    <string name="sky_snow_light">Light snow</string>
+    <string name="sky_snow">Snow</string>
+    <string name="sky_snow_heavy">Heavy snow</string>
+    <string name="sky_snow_grains">Snow grains</string>
+    <string name="sky_showers_light">Light showers</string>
+    <string name="sky_showers">Showers</string>
+    <string name="sky_showers_heavy">Heavy showers</string>
+    <string name="sky_snow_showers_light">Light snow showers</string>
+    <string name="sky_snow_showers_heavy">Heavy snow showers</string>
+    <string name="sky_thunderstorm">Thunderstorm</string>
+    <string name="sky_thunderstorm_hail">Thunderstorm with hail</string>
+    <string name="sky_thunderstorm_hail_heavy">Thunderstorm with heavy hail</string>
+    <string name="sky_unknown">Unknown</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_up_to_date">You are up to date</string>
+    <string name="update_up_to_date_body">Nubo %1$s is the latest published version.</string>
+    <string name="update_check_failed">Could not check</string>
+    <string name="update_check_failed_body">Nubo could not reach GitHub to look for a new version. Check your connection and try again.</string>
+    <string name="about_intro">Nubo shows the forecast anywhere in the world, and the official weather warnings of Spain.</string>
+    <string name="about_data">Data</string>
+    <string name="about_data_forecast">Forecast — Open-Meteo. Hour by hour for the next 24 hours and a summary for seven days: temperature, apparent temperature, dew point, precipitation and its probability, wind, humidity and UV index.</string>
+    <string name="about_data_air">Air quality — Open-Meteo Air Quality, European index from the Copernicus atmosphere service (CAMS). Its model runs out around the fifth day, which is why the last days show no value.</string>
+    <string name="about_data_alerts">Warnings — AEMET, Spain only. They are matched by warning zone, which is smaller than a province: an inland town does not get the coastal warnings of its own province.</string>
+    <string name="about_data_places">Places — Open-Meteo geocoding for search; BigDataCloud resolves the name of your current location.</string>
+    <string name="about_data_astro">Sun and Moon — computed on the phone, without network, in the time zone of each city.</string>
+    <string name="about_privacy">Privacy</string>
+    <string name="about_privacy_body">No account, no advertising and no analytics. Your cities are stored on the phone; only their coordinates travel, to the providers above, to fetch the data you see.</string>
+    <string name="about_updates">Updates</string>
+    <string name="about_updates_body">Nubo is distributed outside Google Play: it checks its GitHub releases and installs the new version itself.</string>
+    <string name="about_build">Version %1$s (build %2$d)</string>
+    <string name="about_repository" translatable="false">github.com/AlbertoBujan/Nubo</string>
+    <string name="notifications">Notifications</string>
+    <string name="alert_notifications">Weather warnings</string>
+    <string name="alert_notifications_hint">Get a notification when a new warning is issued for one of your cities. AEMET only publishes warnings for Spain.</string>
+    <string name="alert_notifications_schedule">Background updates are off, so Nubo will still wake up every %1$d hours to look for warnings.</string>
+    <string name="alert_notifications_channel">New weather warnings for your saved cities.</string>
+    <string name="alert_notification_title">%1$s warning in %2$s</string>
+    <string name="alert_notification_text">%1$s level</string>
+    <string name="notifications_blocked">Notifications are blocked</string>
+    <string name="notifications_blocked_body">Android is blocking Nubo\'s notifications, so warnings cannot be delivered. You can allow them in the system settings.</string>
+    <string name="open_settings">Open settings</string>
 </resources>

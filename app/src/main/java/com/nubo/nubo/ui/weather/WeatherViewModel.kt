@@ -8,6 +8,9 @@ import com.nubo.nubo.data.remote.OpenMeteoException
 import com.nubo.nubo.data.repository.AlertRepository
 import com.nubo.nubo.data.repository.LocationRepository
 import com.nubo.nubo.data.repository.WeatherRepository
+import com.nubo.nubo.data.repository.WeatherRepositoryException
+import com.nubo.nubo.domain.model.CityError
+import com.nubo.nubo.domain.model.ErrorReason
 import com.nubo.nubo.domain.astro.MoonCalculator
 import com.nubo.nubo.domain.astro.SkyPath
 import com.nubo.nubo.domain.astro.SunCalculator
@@ -17,6 +20,7 @@ import com.nubo.nubo.domain.geo.distanceKm
 import com.nubo.nubo.domain.model.SavedLocation
 import com.nubo.nubo.domain.model.zoneOf
 import com.nubo.nubo.domain.weather.SunPhase
+import com.nubo.nubo.domain.weather.sunPhaseAt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -26,7 +30,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -101,6 +104,7 @@ class WeatherViewModel(
                 backgroundInterval = BackgroundInterval.entries.getOrElse(
                     storage.loadBackgroundIntervalIndex(),
                 ) { BackgroundInterval.OFF },
+                alertNotifications = storage.loadAlertNotifications(),
                 isInitialized = true,
             )
         }
@@ -151,9 +155,16 @@ class WeatherViewModel(
         }
     }
 
+    /**
+     * Despierta el estado para que las fases solares se recalculen.
+     *
+     * Ya no guarda ninguna fase: cada ciudad calcula la suya con su propio
+     * reloj (`CityWeather.sunPhase`). Lo único que hace falta es volver a
+     * emitir el estado cada minuto para que la interfaz relea esos valores,
+     * porque dependen de la hora y no de ningún dato guardado.
+     */
     private fun updateSunPhase() {
-        val sunTimes = _uiState.value.currentCity?.sunTimes
-        _uiState.update { it.copy(sunPhase = phaseFor(sunTimes)) }
+        _uiState.update { it.copy(clockTick = it.clockTick + 1) }
     }
 
     // ── Carga de datos ──────────────────────────────────────────────────────
@@ -172,10 +183,16 @@ class WeatherViewModel(
                 fetchInto(locationId)
                 updateCity(locationId) { it.copy(isLoading = false, error = null) }
             } catch (e: OpenMeteoException) {
-                updateCity(locationId) { it.copy(isLoading = false, error = e.message) }
+                updateCity(locationId) {
+                    it.copy(isLoading = false, error = CityError(e.reason, e.statusCode))
+                }
+            } catch (e: WeatherRepositoryException) {
+                updateCity(locationId) {
+                    it.copy(isLoading = false, error = CityError(e.reason))
+                }
             } catch (e: Exception) {
                 updateCity(locationId) {
-                    it.copy(isLoading = false, error = "Error de conexión: ${e.message}")
+                    it.copy(isLoading = false, error = CityError(ErrorReason.NETWORK))
                 }
             }
         }
@@ -467,18 +484,18 @@ class WeatherViewModel(
                 val nearest = locationRepository.findNearest(position.lat, position.lon)
                 if (nearest != null) addLocation(nearest, switchTo = true)
             } catch (e: LocationException) {
-                reportLocationError(e.message)
+                reportLocationError(e.reason)
             } catch (e: Exception) {
-                reportLocationError("Error de geolocalización: ${e.message}")
+                reportLocationError(ErrorReason.LOCATION_UNKNOWN)
             } finally {
                 _uiState.update { it.copy(isLocating = false) }
             }
         }
     }
 
-    private fun reportLocationError(message: String?) {
+    private fun reportLocationError(reason: ErrorReason) {
         val id = _uiState.value.currentMunicipioId
-        if (id.isNotEmpty()) updateCity(id) { it.copy(error = message) }
+        if (id.isNotEmpty()) updateCity(id) { it.copy(error = CityError(reason)) }
     }
 
     // ── Búsqueda ────────────────────────────────────────────────────────────
@@ -574,6 +591,16 @@ class WeatherViewModel(
         }
     }
 
+    fun setAlertNotifications(enabled: Boolean) {
+        viewModelScope.launch {
+            storage.saveAlertNotifications(enabled)
+            // Apagarlas olvida qué se había anunciado: al volver a encenderlas
+            // interesa saber qué hay ahora, no callar por lo que se avisó antes.
+            if (!enabled) storage.saveNotifiedAlerts(emptySet())
+            _uiState.update { it.copy(alertNotifications = enabled) }
+        }
+    }
+
     // ── Utilidades ──────────────────────────────────────────────────────────
 
     private fun updateCity(locationId: String, transform: (CityWeather) -> CityWeather) {
@@ -600,28 +627,11 @@ class WeatherViewModel(
         private const val MAX_SEARCH_RESULTS = 25
 
         /** Ventana a cada lado del orto y del ocaso donde el cielo transiciona. */
-        private val TRANSITION = Duration.ofMinutes(30)
 
-        /** Fase solar del momento a partir del amanecer y el ocaso del día. */
+        /** Se conserva como puerta de entrada; la lógica vive en el dominio. */
         fun phaseFor(
             sunTimes: SunTimes?,
             now: LocalDateTime = LocalDateTime.now(),
-        ): SunPhase {
-            // Sin datos solares se asume de día: es el fondo más neutro y
-            // evita arrancar la app en negro mientras se calcula.
-            if (sunTimes == null) return SunPhase.DAY
-
-            val sunriseStart = sunTimes.sunrise.minus(TRANSITION)
-            val sunriseEnd = sunTimes.sunrise.plus(TRANSITION)
-            val sunsetStart = sunTimes.sunset.minus(TRANSITION)
-            val sunsetEnd = sunTimes.sunset.plus(TRANSITION)
-
-            return when {
-                now >= sunriseStart && now < sunriseEnd -> SunPhase.SUNRISE
-                now >= sunriseEnd && now < sunsetStart -> SunPhase.DAY
-                now >= sunsetStart && now < sunsetEnd -> SunPhase.SUNSET
-                else -> SunPhase.NIGHT
-            }
-        }
+        ): SunPhase = sunPhaseAt(sunTimes, now)
     }
 }

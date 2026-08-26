@@ -1,0 +1,16 @@
+<!--
+  Icono de la barra de estado: Android lo pinta como silueta de un solo color,
+  así que tiene que leerse por su forma. El triángulo de aviso es el único
+  dibujo del proyecto que no puede permitirse degradados ni relleno parcial.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2 L23,21 L1,21 Z M11,9 L11,15 L13,15 L13,9 Z M11,17 L11,19 L13,19 L13,17 Z"
+        android:fillType="evenOdd" />
+</vector>

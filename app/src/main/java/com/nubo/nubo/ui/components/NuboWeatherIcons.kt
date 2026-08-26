@@ -28,12 +28,26 @@ import kotlin.math.sin
  */
 object NuboWeatherIcons {
 
+    val CloudRainLight: ImageVector by lazy { buildCloudIcon("CloudRainLight", LIGHT_RAIN_STREAKS) }
+
     val CloudRain: ImageVector by lazy { buildCloudIcon("CloudRain", RAIN_STREAKS) }
+
+    val CloudRainHeavy: ImageVector by lazy {
+        buildCloudIcon("CloudRainHeavy", HEAVY_RAIN_STREAKS, strokeWidth = 2.4f)
+    }
 
     val CloudDrizzle: ImageVector by lazy { buildCloudIcon("CloudDrizzle", DRIZZLE_STREAKS) }
 
+    val CloudSnowLight: ImageVector by lazy {
+        buildCloudIcon("CloudSnowLight", streaks = emptyList(), flakes = LIGHT_SNOW_FLAKES)
+    }
+
     val CloudSnow: ImageVector by lazy {
         buildCloudIcon("CloudSnow", streaks = emptyList(), flakes = SNOW_FLAKES)
+    }
+
+    val CloudSnowHeavy: ImageVector by lazy {
+        buildCloudIcon("CloudSnowHeavy", streaks = emptyList(), flakes = HEAVY_SNOW_FLAKES)
     }
 }
 
@@ -48,6 +62,30 @@ private val RAIN_STREAKS = listOf(
     Streak(8.2f, 17.6f, 6.9f, 21.4f),
     Streak(12.6f, 17.6f, 11.3f, 21.4f),
     Streak(17.0f, 17.6f, 15.7f, 21.4f),
+)
+
+/**
+ * Dos trazos largos: la lluvia débil se separa de la llovizna por el **largo**
+ * del trazo, no por cuántos hay, y de la normal por cuántos hay, no por el
+ * largo. Cambiar las dos cosas a la vez haría que los tres escalones se
+ * parecieran entre sí en lugar de leerse como una escala.
+ */
+private val LIGHT_RAIN_STREAKS = listOf(
+    Streak(10.4f, 17.6f, 9.1f, 21.4f),
+    Streak(14.8f, 17.6f, 13.5f, 21.4f),
+)
+
+/**
+ * Cuatro trazos, más largos y más gruesos.
+ *
+ * A 24 dp un trazo más no basta —de tres a cuatro casi no se cuenta—, así que
+ * el escalón lo llevan las tres cosas juntas: número, largo y grosor.
+ */
+private val HEAVY_RAIN_STREAKS = listOf(
+    Streak(7.0f, 17.4f, 5.8f, 21.8f),
+    Streak(10.4f, 17.4f, 9.2f, 21.8f),
+    Streak(13.8f, 17.4f, 12.6f, 21.8f),
+    Streak(17.2f, 17.4f, 16.0f, 21.8f),
 )
 
 /** Dos trazos cortos: misma nube, precipitación visiblemente menor. */
@@ -70,10 +108,28 @@ private val SNOW_FLAKES = listOf(
     Flake(15.5f, 19.8f, 1.9f),
 )
 
+/** Un solo copo, centrado: la nevada débil. */
+private val LIGHT_SNOW_FLAKES = listOf(
+    Flake(12.2f, 19.8f, 1.9f),
+)
+
+/**
+ * Tres copos en dos alturas.
+ *
+ * Puestos en fila no cabían sin encogerlos hasta perder las puntas, que es lo
+ * único que hace que un asterisco se lea como nieve.
+ */
+private val HEAVY_SNOW_FLAKES = listOf(
+    Flake(8.2f, 18.9f, 1.75f),
+    Flake(15.8f, 18.9f, 1.75f),
+    Flake(12.0f, 21.4f, 1.75f),
+)
+
 private fun buildCloudIcon(
     name: String,
     streaks: List<Streak>,
     flakes: List<Flake> = emptyList(),
+    strokeWidth: Float = 2f,
 ): ImageVector =
     ImageVector.Builder(
         name = name,
@@ -90,7 +146,7 @@ private fun buildCloudIcon(
         streaks.forEach { s ->
             path(
                 stroke = SolidColor(Color.Black),
-                strokeLineWidth = 2f,
+                strokeLineWidth = strokeWidth,
                 strokeLineCap = StrokeCap.Round,
             ) {
                 moveTo(s.x1, s.y1)

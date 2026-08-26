@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -112,9 +113,12 @@ fun SkyLayerOverlay(
     windSpeed: Int?,
     /** Dirección de procedencia en grados meteorológicos (0 = norte). */
     windDegrees: Int?,
+    /** Opacidad impuesta desde fuera, para desvanecer la capa al cambiar de ciudad. */
+    alpha: Float = 1f,
     modifier: Modifier = Modifier,
 ) {
-    if (layer.isEmpty) {
+    val visibility = alpha.coerceIn(0f, 1f)
+    if (layer.isEmpty || visibility <= 0f) {
         Box(modifier)
         return
     }
@@ -170,7 +174,14 @@ fun SkyLayerOverlay(
 
     val drift = windDrift(windSpeed, windDegrees)
 
-    Canvas(modifier = modifier.fillMaxSize()) {
+    // La opacidad se aplica a la capa entera y no dato a dato: aquí se dibujan
+    // velo, bandas, estrellas y nubes, cada uno con su propio alfa, y
+    // multiplicarlos por separado sería cuatro sitios donde olvidarse de uno.
+    Canvas(
+        modifier = modifier
+            .fillMaxSize()
+            .graphicsLayer { this.alpha = visibility },
+    ) {
         if (layer.fogBands > 0) {
             // Un velo de fondo además de las bandas: la niebla es sobre todo
             // pérdida de visibilidad, y solo con franjas se leía como calima.

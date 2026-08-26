@@ -202,7 +202,7 @@ class HourlyForecastTrimTest {
     }
 
     @Test
-    fun `una semana de horas se queda en dos dias`() {
+    fun `una semana de horas se queda en un dia`() {
         val parsed = HourlyForecast.fromOpenMeteoJson(payload(hours = 168))
         assertEquals(HourlyForecast.MAX_HOURS, parsed.size)
     }

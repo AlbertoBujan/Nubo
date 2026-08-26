@@ -18,7 +18,7 @@ class MoonCalculatorTest {
         var date = LocalDateTime.of(2025, 1, 1, 0, 0)
         repeat(365) {
             val moon = MoonCalculator.calculate(date, madridLat, madridLng, utc)
-            assertTrue("fase ${moon.phase} en $date", moon.phase in 0.0..1.0)
+            assertTrue("ciclo ${moon.cycle} en $date", moon.cycle in 0.0..1.0)
             assertTrue("iluminación ${moon.illumination} en $date", moon.illumination in 0.0..1.0)
             date = date.plusDays(1)
         }
@@ -28,12 +28,12 @@ class MoonCalculatorTest {
     fun `el ciclo lunar completo dura un mes sinodico`() {
         // Se cuentan las lunas nuevas de un año: la fase cruza de ~1 a ~0.
         var previous = MoonCalculator
-            .calculate(LocalDateTime.of(2025, 1, 1, 12, 0), madridLat, madridLng, utc).phase
+            .calculate(LocalDateTime.of(2025, 1, 1, 12, 0), madridLat, madridLng, utc).cycle
         var newMoons = 0
 
         var date = LocalDateTime.of(2025, 1, 2, 12, 0)
         repeat(364) {
-            val phase = MoonCalculator.calculate(date, madridLat, madridLng, utc).phase
+            val phase = MoonCalculator.calculate(date, madridLat, madridLng, utc).cycle
             if (phase < previous - 0.5) newMoons++
             previous = phase
             date = date.plusDays(1)
@@ -68,9 +68,9 @@ class MoonCalculatorTest {
             val moon = MoonCalculator.calculate(date, madridLat, madridLng, utc)
             // La fracción iluminada es máxima en la llena (fase 0,5) y mínima
             // en la nueva (fase 0 o 1); el error admitido cubre la excentricidad.
-            val expected = (1 - kotlin.math.cos(2 * Math.PI * moon.phase)) / 2
+            val expected = (1 - kotlin.math.cos(2 * Math.PI * moon.cycle)) / 2
             assertTrue(
-                "fase ${moon.phase} vs iluminación ${moon.illumination} en $date",
+                "ciclo ${moon.cycle} vs iluminación ${moon.illumination} en $date",
                 abs(expected - moon.illumination) < 0.06,
             )
             date = date.plusDays(1)
@@ -88,14 +88,14 @@ class MoonCalculatorTest {
 
     @Test
     fun `los nombres de fase cubren el ciclo`() {
-        assertEquals("Luna nueva", MoonCalculator.phaseName(0.0))
-        assertEquals("Luna nueva", MoonCalculator.phaseName(0.99))
-        assertEquals("Creciente cóncava", MoonCalculator.phaseName(0.10))
-        assertEquals("Cuarto creciente", MoonCalculator.phaseName(0.25))
-        assertEquals("Creciente convexa", MoonCalculator.phaseName(0.35))
-        assertEquals("Luna llena", MoonCalculator.phaseName(0.50))
-        assertEquals("Menguante convexa", MoonCalculator.phaseName(0.60))
-        assertEquals("Cuarto menguante", MoonCalculator.phaseName(0.75))
-        assertEquals("Menguante cóncava", MoonCalculator.phaseName(0.85))
+        assertEquals(MoonPhase.NEW, MoonCalculator.phaseOf(0.0))
+        assertEquals(MoonPhase.NEW, MoonCalculator.phaseOf(0.99))
+        assertEquals(MoonPhase.WAXING_CRESCENT, MoonCalculator.phaseOf(0.10))
+        assertEquals(MoonPhase.FIRST_QUARTER, MoonCalculator.phaseOf(0.25))
+        assertEquals(MoonPhase.WAXING_GIBBOUS, MoonCalculator.phaseOf(0.35))
+        assertEquals(MoonPhase.FULL, MoonCalculator.phaseOf(0.50))
+        assertEquals(MoonPhase.WANING_GIBBOUS, MoonCalculator.phaseOf(0.60))
+        assertEquals(MoonPhase.LAST_QUARTER, MoonCalculator.phaseOf(0.75))
+        assertEquals(MoonPhase.WANING_CRESCENT, MoonCalculator.phaseOf(0.85))
     }
 }

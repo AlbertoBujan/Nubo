@@ -1,5 +1,7 @@
 package com.nubo.nubo.ui.weather
 
+import com.nubo.nubo.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -85,7 +87,7 @@ fun SearchLocationSheet(
                 .padding(bottom = 24.dp),
         ) {
             Text(
-                "Buscar localización",
+                stringResource(R.string.search_location),
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.W600,
@@ -101,7 +103,7 @@ fun SearchLocationSheet(
                     onQueryChange(it)
                 },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Escribe un municipio…") },
+                placeholder = { Text(stringResource(R.string.search_hint)) },
                 leadingIcon = { Icon(Icons.Outlined.Search, null) },
                 singleLine = true,
             )
@@ -119,7 +121,11 @@ fun SearchLocationSheet(
                 ) {
                     Icon(Icons.Outlined.MyLocation, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(if (isLocating) "Localizando…" else "Usar mi ubicación actual")
+                    Text(
+                        stringResource(
+                            if (isLocating) R.string.locating else R.string.use_my_location,
+                        ),
+                    )
                 }
 
                 // Va apagado por defecto a propósito: ordenar por cercanía
@@ -142,7 +148,7 @@ fun SearchLocationSheet(
                         ),
                     )
                     Text(
-                        "Cerca de mí",
+                        stringResource(R.string.search_nearby),
                         color = Color.White.copy(alpha = 0.8f),
                         fontSize = 14.sp,
                     )
@@ -170,7 +176,7 @@ fun SearchLocationSheet(
                     }
 
                     results.isEmpty() -> Text(
-                        "Sin resultados para \"$query\"",
+                        stringResource(R.string.no_results_for, query),
                         color = Color.White.copy(alpha = 0.6f),
                         modifier = Modifier.padding(vertical = 24.dp),
                     )
@@ -225,7 +231,7 @@ fun SearchLocationSheet(
                                 }
                                 Icon(
                                     Icons.Filled.Add,
-                                    "Añadir",
+                                    stringResource(R.string.add),
                                     tint = Color.White.copy(alpha = 0.6f),
                                     modifier = Modifier.size(20.dp),
                                 )

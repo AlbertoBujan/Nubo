@@ -115,7 +115,6 @@ class CityWeatherTest {
         dateTime = LocalDateTime.now().plusHours(offsetHours),
         temperature = temp,
         skyStateCode = code,
-        skyDescription = "",
         precipitationProbability = null,
         humidity = null,
         windSpeed = null,
@@ -148,14 +147,14 @@ class CityWeatherTest {
             locationId = "28079",
             name = "Madrid",
             daily = listOf(
-                DailyForecast(today.plusDays(1), 30, 20, "0", "", null),
-                DailyForecast(today, 25, 15, "0", "", null),
+                DailyForecast(today.plusDays(1), 30, 20, "0", null),
+                DailyForecast(today, 25, 15, "0", null),
             ),
         )
         assertEquals(25 to 15, city.todayRange)
 
         val sinHoy = city.copy(
-            daily = listOf(DailyForecast(today.plusDays(2), 12, 4, "0", "", null)),
+            daily = listOf(DailyForecast(today.plusDays(2), 12, 4, "0", null)),
         )
         assertEquals(12 to 4, sinHoy.todayRange)
     }
@@ -163,23 +162,11 @@ class CityWeatherTest {
     @Test
     fun `el texto de frescura se adapta a la antiguedad`() {
         val base = CityWeather("28079", "Madrid")
-        assertEquals("", base.lastRefreshText)
-        assertEquals(
-            "Actualizado",
-            base.copy(lastUpdated = LocalDateTime.now()).lastRefreshText,
-        )
-        assertEquals(
-            "Hace 5 min",
-            base.copy(lastUpdated = LocalDateTime.now().minusMinutes(5)).lastRefreshText,
-        )
-        assertEquals(
-            "Hace 3 h",
-            base.copy(lastUpdated = LocalDateTime.now().minusHours(3)).lastRefreshText,
-        )
-        assertEquals(
-            "Hace 2 d",
-            base.copy(lastUpdated = LocalDateTime.now().minusDays(2)).lastRefreshText,
-        )
+        assertNull(base.dataAge)
+        assertEquals(AgeUnit.JUST_NOW, base.copy(lastUpdated = LocalDateTime.now()).dataAge?.unit)
+        assertEquals(DataAge(AgeUnit.MINUTES, 5), base.copy(lastUpdated = LocalDateTime.now().minusMinutes(5)).dataAge)
+        assertEquals(DataAge(AgeUnit.HOURS, 3), base.copy(lastUpdated = LocalDateTime.now().minusHours(3)).dataAge)
+        assertEquals(DataAge(AgeUnit.DAYS, 2), base.copy(lastUpdated = LocalDateTime.now().minusDays(2)).dataAge)
     }
 
     @Test
@@ -191,7 +178,7 @@ class CityWeatherTest {
                 "1",
                 "x",
                 hourly = listOf(hour(0, 20)),
-                daily = listOf(DailyForecast(today, 20, 10, "0", "", null)),
+                daily = listOf(DailyForecast(today, 20, 10, "0", null)),
             ).hasData,
         )
     }

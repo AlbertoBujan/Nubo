@@ -31,10 +31,24 @@ class UpdateService(
     private val http: HttpClient = HttpClient(),
 ) {
 
-    suspend fun checkForUpdates(): AvailableUpdate? = try {
+    /**
+     * Resultado de mirar si hay versión nueva.
+     *
+     * "No hay novedades" y "no he podido preguntar" son cosas distintas y el
+     * único sitio donde se sabe es aquí: devolver `null` para las dos obligaba a
+     * la pantalla a callar siempre, porque decir "estás al día" sin red sería
+     * mentira. Con esto, la comprobación manual puede responder a las dos.
+     */
+    sealed interface UpdateCheck {
+        data class Available(val update: AvailableUpdate) : UpdateCheck
+        data object UpToDate : UpdateCheck
+        data object Failed : UpdateCheck
+    }
+
+    suspend fun checkForUpdates(): UpdateCheck = try {
         val response = http.get(RELEASES_URL, timeoutSeconds = 10)
         if (!response.isSuccess) {
-            null
+            UpdateCheck.Failed
         } else {
             val data = JSONObject(response.decodeText())
             val latest = data.optString("tag_name").removePrefix("v")
@@ -45,15 +59,17 @@ class UpdateService(
                     ?.optString("browser_download_url")
             }
 
-            if (apkUrl.isNullOrBlank() || !isNewerVersion(BuildConfig.VERSION_NAME, latest)) {
-                null
-            } else {
-                AvailableUpdate(latest, apkUrl)
+            when {
+                // Una release sin APK es una publicación a medias, no un "estás
+                // al día": no hay nada que ofrecer, pero tampoco que confirmar.
+                apkUrl.isNullOrBlank() -> UpdateCheck.Failed
+                isNewerVersion(BuildConfig.VERSION_NAME, latest) ->
+                    UpdateCheck.Available(AvailableUpdate(latest, apkUrl))
+                else -> UpdateCheck.UpToDate
             }
         }
     } catch (_: Exception) {
-        // Sin red no hay actualización que ofrecer; no es un error que mostrar.
-        null
+        UpdateCheck.Failed
     }
 
     /**

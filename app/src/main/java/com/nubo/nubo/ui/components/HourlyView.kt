@@ -1,7 +1,10 @@
 package com.nubo.nubo.ui.components
 
+import com.nubo.nubo.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.DecayAnimationSpec
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateTo
 import androidx.compose.animation.core.calculateTargetValue
@@ -32,7 +35,11 @@ import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +51,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -58,6 +66,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nubo.nubo.domain.model.HourlyForecast
+import com.nubo.nubo.domain.model.AlertType
 import com.nubo.nubo.domain.model.WeatherAlert
 import com.nubo.nubo.domain.weather.WeatherCode
 import java.time.LocalDate
@@ -66,6 +75,7 @@ import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.tanh
 
 /**
  * Horas que caben a la vez, y tamaño del bloque que avanza cada deslizamiento.
@@ -81,9 +91,16 @@ private val CHART_HEIGHT = 110.dp
 
 private val DEW_COLOR = Color(0xFF80DEEA)
 
-private val SPANISH: java.util.Locale = java.util.Locale.forLanguageTag("es-ES")
-private val SHORT_DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE", SPANISH)
-private val HOUR: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", SPANISH)
+/**
+ * Formatos de fecha **en el idioma del teléfono**.
+ *
+ * Antes forzaban `es-ES`, y con razón: sin eso los días salían en el idioma
+ * del sistema dentro de una interfaz que solo hablaba español, y quedaba peor.
+ * Ahora que la app se traduce, ese arreglo sería el fallo — pondría "lunes"
+ * dentro de una pantalla en inglés.
+ */
+private val SHORT_DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE")
+private val HOUR: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 /** Carrusel horario con el gráfico de temperaturas debajo. */
 @Composable
@@ -120,19 +137,24 @@ fun HourlyView(
         } ?: -1
     }
 
-    GlassCard(
-        modifier = modifier.fillMaxWidth(),
-        cornerRadius = 24.dp,
-    ) {
-        Column(Modifier.padding(top = 16.dp, bottom = 8.dp)) {
-            SectionTitle(
-                icon = Icons.Outlined.Schedule,
-                text = "Predicción por horas",
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+    // El título va **fuera** de la tarjeta, como el de los próximos días.
+    // `SectionTitle` solo se usa en esos dos sitios y son lo mismo —el
+    // encabezado de una sección de la página—, así que tenerlo dentro en uno y
+    // fuera en el otro los hacía parecer cosas distintas. Los rótulos de Sol y
+    // Luna sí van dentro, pero no son encabezados: son la etiqueta de una
+    // tarjetita, y de hecho ni siquiera usan este componente.
+    Column(modifier.fillMaxWidth()) {
+        SectionTitle(
+            icon = Icons.Outlined.Schedule,
+            text = stringResource(R.string.next_hours),
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
 
-            Spacer(Modifier.height(16.dp))
-
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 24.dp,
+        ) {
+            Column(Modifier.padding(top = 14.dp, bottom = 8.dp)) {
             BoxWithConstraints {
                 // El ancho de columna se redondea a **píxeles enteros**, que es
                 // lo que hace el layout al medirla, y de ahí sale el bloque.
@@ -149,13 +171,18 @@ fun HourlyView(
                 // columnas: el gráfico ocupa la mitad de abajo y está fuera
                 // del área desplazable, así que arrastrando sobre él no
                 // pasaba nada.
+                // Resistencia en los topes: sin ella el gesto se quedaba
+                // completamente muerto al llegar al principio o al final.
+                val edge = remember { EdgeResistance() }
+                edge.limit = with(density) { MAX_EDGE_PULL.toPx() }
+
                 Column(
                     Modifier
                         // Justo un bloque de ancho. Con la holgura sobrante de
                         // la tarjeta, el tope del scroll caía a media columna
                         // del último bloque y no se llegaba a encajar.
                         .width(blockWidth)
-                        .nestedScroll(StayInsideCard)
+                        .nestedScroll(remember(edge) { stayInsideCard(edge) })
                         .scrollable(
                             state = scrollState,
                             orientation = Orientation.Horizontal,
@@ -163,7 +190,8 @@ fun HourlyView(
                             // Arrastrar hacia la izquierda avanza en el tiempo,
                             // igual que hace `horizontalScroll` por dentro.
                             reverseDirection = true,
-                        ),
+                        )
+                        .graphicsLayer { translationX = edge.pull },
                 ) {
                     // Desplaza el contenido pero **no** captura el gesto: de
                     // eso se encarga la columna entera. Con las dos activas,
@@ -184,7 +212,7 @@ fun HourlyView(
 
                     // El gráfico no va dentro del scroll: ocupa el ancho de la
                     // tarjeta y se dibuja desplazado a mano. Así la curva no
-                    // arrastra consigo el trabajo de medir 48 columnas.
+                    // arrastra consigo el trabajo de medir todas las columnas.
                     TemperatureChart(
                         forecasts = hours,
                         itemWidth = itemWidth,
@@ -194,6 +222,7 @@ fun HourlyView(
                             .height(CHART_HEIGHT),
                     )
                 }
+            }
             }
         }
     }
@@ -211,17 +240,90 @@ fun HourlyView(
  * Solo se consume la componente horizontal. La vertical se deja pasar entera
  * porque es la que hace correr la página.
  */
-private val StayInsideCard = object : NestedScrollConnection {
+private fun stayInsideCard(edge: EdgeResistance) = object : NestedScrollConnection {
 
     override fun onPostScroll(
         consumed: Offset,
         available: Offset,
         source: NestedScrollSource,
-    ): Offset = Offset(available.x, 0f)
+    ): Offset {
+        // Lo que sobra es justo lo que el carrusel no ha podido recorrer: se
+        // aprovecha para empujar la tarjeta antes de quedárselo.
+        if (available.x != 0f) edge.push(available.x)
+        return Offset(available.x, 0f)
+    }
 
-    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
-        Velocity(available.x, 0f)
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+        // Se llama al soltar, haya habido inercia o no, así que sirve de aviso
+        // de que el dedo ya no está.
+        edge.release()
+        return Velocity(available.x, 0f)
+    }
 }
+
+/**
+ * Empuje elástico de la tarjeta contra sus topes.
+ *
+ * El efecto de rebote de Android no sirve aquí, y no por capricho: el sobrante
+ * se despacha a los padres —donde [stayInsideCard] tiene que quedárselo para
+ * que no cambie de ciudad— **antes** de que el efecto llegue a verlo. Dejarlo
+ * pasar para que el efecto funcione es exactamente devolverle el gesto al
+ * carrusel de ciudades.
+ *
+ * Así que el empuje se lleva desde el mismo sitio donde ya se intercepta ese
+ * sobrante. El desplazamiento crece con **rendimiento decreciente**: un
+ * arrastre grande apenas mueve más que uno mediano, que es lo que se siente
+ * como un tope elástico y no como algo roto.
+ */
+@Stable
+private class EdgeResistance {
+
+    /** Cuánto se puede llegar a mover, en píxeles. */
+    var limit: Float = 0f
+
+    /** Desplazamiento a pintar. */
+    var pull by mutableFloatStateOf(0f)
+        private set
+
+    /** Arrastre acumulado sin amortiguar, del que sale [pull]. */
+    private var raw = 0f
+
+    fun push(delta: Float) {
+        if (limit <= 0f) return
+        raw += delta
+        pull = edgePull(raw, limit)
+    }
+
+    suspend fun release() {
+        if (pull == 0f) {
+            raw = 0f
+            return
+        }
+        animate(
+            initialValue = pull,
+            targetValue = 0f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium,
+            ),
+        ) { value, _ -> pull = value }
+        raw = 0f
+    }
+}
+
+/** Lo que llega a moverse la tarjeta cuando ya no hay más horas. */
+private val MAX_EDGE_PULL = 28.dp
+
+/**
+ * Desplazamiento visible para un arrastre acumulado de [raw] contra el tope.
+ *
+ * La tangente hiperbólica da el rendimiento decreciente: los primeros píxeles
+ * se notan casi enteros y a partir de ahí cuesta cada vez más, sin llegar
+ * nunca a [limit]. Es lo que se siente como un tope elástico en vez de como
+ * algo que se ha soltado.
+ */
+internal fun edgePull(raw: Float, limit: Float): Float =
+    if (limit <= 0f) 0f else limit * tanh(raw / limit)
 
 /**
  * Inercia que asienta el carrusel en bloques de [VISIBLE_HOURS] horas.
@@ -298,8 +400,8 @@ private fun HourColumn(
 ) {
 
     val dayLabel = when (forecast.dateTime.toLocalDate()) {
-        today -> "Hoy"
-        today.plusDays(1) -> "Mañana"
+        today -> stringResource(R.string.today)
+        today.plusDays(1) -> stringResource(R.string.tomorrow)
         // El locale va explícito: sin él se usa el del dispositivo y los días
         // salían en inglés ("Wed") en un teléfono configurado en otro idioma.
         else -> forecast.dateTime.format(SHORT_DAY)
@@ -311,7 +413,7 @@ private fun HourColumn(
         val from = forecast.dateTime
         val to = from.plusHours(1)
         alerts.filter { it.overlaps(from, to) }
-            .distinctBy { normalizeType(it.event) }
+            .distinctBy { AlertType.of(it.event) }
             .sortedByDescending { it.severity }
             .take(2)
     }
@@ -322,7 +424,7 @@ private fun HourColumn(
     ) {
         Text(dayLabel, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
         Text(
-            if (isNow) "Ahora" else forecast.dateTime.format(HOUR),
+            if (isNow) stringResource(R.string.now) else forecast.dateTime.format(HOUR),
             color = if (isNow) Color.White else Color.White.copy(alpha = 0.85f),
             fontSize = 13.sp,
             fontWeight = if (isNow) FontWeight.W600 else FontWeight.Normal,
@@ -332,7 +434,9 @@ private fun HourColumn(
 
         Icon(
             imageVector = WeatherCode.fromCode(forecast.skyStateCode).icon.toImageVector(),
-            contentDescription = forecast.skyDescription,
+            contentDescription = stringResource(
+                WeatherCode.fromCode(forecast.skyStateCode).description.labelRes,
+            ),
             tint = Color.White,
             modifier = Modifier.size(26.dp),
         )
@@ -374,7 +478,7 @@ private fun HourColumn(
                     Icon(
                         // El icono del fenómeno concreto (viento, costeros,
                         // nieve…) dice mucho más que un triángulo genérico.
-                        imageVector = iconForType(normalizeType(alert.event)),
+                        imageVector = iconForType(AlertType.of(alert.event)),
                         contentDescription = alert.event,
                         tint = alert.level.toColor(),
                         modifier = Modifier.size(13.dp),

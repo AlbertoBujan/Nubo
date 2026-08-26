@@ -1,5 +1,7 @@
 package com.nubo.nubo.ui.weather
 
+import com.nubo.nubo.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -23,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.Icon
@@ -89,7 +90,6 @@ fun LocationList(
     onSelect: (Int) -> Unit,
     onRemove: (Int) -> Unit,
     onMove: (Int, Int) -> Unit,
-    onAddLocation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
@@ -110,7 +110,14 @@ fun LocationList(
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        // Abajo cabe el botón flotante de añadir, para que la última
+        // tarjeta se pueda leer y arrastrar sin quedar debajo de él.
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 4.dp,
+            bottom = 88.dp,
+        ),
         verticalArrangement = Arrangement.spacedBy(CARD_GAP),
         // Arrastrar una tarjeta no debe además desplazar la lista.
         userScrollEnabled = dragFrom < 0,
@@ -175,10 +182,6 @@ fun LocationList(
                         )
                     },
             )
-        }
-
-        item(key = "add") {
-            AddLocationCard(onAddLocation)
         }
     }
 }
@@ -344,39 +347,13 @@ private fun DeleteBackground(progress: Float, armed: Boolean) {
         )
         Spacer(Modifier.width(12.dp))
         Text(
-            if (armed) "Suelta para eliminar" else "Desliza para eliminar",
+            stringResource(
+                    if (armed) R.string.release_to_delete else R.string.swipe_to_delete,
+                ),
             color = Color.White.copy(alpha = 0.55f + 0.45f * tint),
             fontSize = 13.sp,
             fontWeight = if (armed) FontWeight.W600 else FontWeight.Normal,
             maxLines = 1,
-        )
-    }
-}
-
-/** Tarjeta punteada del final: añadir una ubicación nueva. */
-@Composable
-private fun AddLocationCard(onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(CARD_HEIGHT)
-            .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Outlined.Add,
-            null,
-            tint = Color.White.copy(alpha = 0.7f),
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        Text(
-            "Añadir ubicación",
-            color = Color.White.copy(alpha = 0.8f),
-            fontSize = 16.sp,
         )
     }
 }

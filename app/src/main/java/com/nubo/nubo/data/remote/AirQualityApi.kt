@@ -1,5 +1,6 @@
 package com.nubo.nubo.data.remote
 
+import com.nubo.nubo.domain.model.ErrorReason
 import org.json.JSONObject
 
 /**
@@ -10,8 +11,9 @@ import org.json.JSONObject
  * invalida nada: sin este dato la tarjeta enseña un guion, igual que los avisos
  * fuera de España.
  *
- * Se piden solo dos días de índice europeo porque es todo lo que se enseña, y
- * el payload se queda en algo más de un kilobyte.
+ * Se piden siete días para poder resumir cada uno en su desplegable, aunque
+ * el modelo CAMS solo llega a unos cinco: los últimos vienen vacíos y esas
+ * casillas enseñan un guion. El payload sigue siendo de unos pocos kilobytes.
  */
 class AirQualityApi(private val http: HttpClient = HttpClient()) {
 
@@ -27,10 +29,7 @@ class AirQualityApi(private val http: HttpClient = HttpClient()) {
 
         val response = http.get(url, timeoutSeconds = TIMEOUT_SECONDS)
         if (!response.isSuccess) {
-            throw OpenMeteoException(
-                "Calidad del aire no disponible. Código ${response.code}",
-                response.code,
-            )
+            throw OpenMeteoException(ErrorReason.SERVER, response.code)
         }
 
         return JSONObject(response.decodeText())
@@ -38,7 +37,7 @@ class AirQualityApi(private val http: HttpClient = HttpClient()) {
 
     private companion object {
         const val BASE_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
-        const val FORECAST_DAYS = 2
+        const val FORECAST_DAYS = 7
         const val TIMEOUT_SECONDS = 15L
     }
 }

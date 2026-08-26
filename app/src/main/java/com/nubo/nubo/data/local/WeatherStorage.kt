@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -150,7 +151,26 @@ class WeatherStorage(private val context: Context) {
         store.edit { prefs -> prefs[BACKGROUND_INTERVAL_KEY] = index }
     }
 
+    // ── Notificaciones de avisos ────────────────────────────────────────────
+
+    suspend fun loadAlertNotifications(): Boolean =
+        store.data.first()[ALERT_NOTIFICATIONS_KEY] ?: false
+
+    suspend fun saveAlertNotifications(enabled: Boolean) {
+        store.edit { prefs -> prefs[ALERT_NOTIFICATIONS_KEY] = enabled }
+    }
+
+    /** Claves de los avisos ya anunciados; ver `AlertNotifications`. */
+    suspend fun loadNotifiedAlerts(): Set<String> =
+        store.data.first()[NOTIFIED_ALERTS_KEY] ?: emptySet()
+
+    suspend fun saveNotifiedAlerts(keys: Set<String>) {
+        store.edit { prefs -> prefs[NOTIFIED_ALERTS_KEY] = keys }
+    }
+
     private companion object {
+        val ALERT_NOTIFICATIONS_KEY = booleanPreferencesKey("alert_notifications")
+        val NOTIFIED_ALERTS_KEY = stringSetPreferencesKey("notified_alerts")
         val LOCATIONS_KEY = stringSetPreferencesKey("saved_locations")
         val BACKGROUND_INTERVAL_KEY = intPreferencesKey("bg_update_interval")
 

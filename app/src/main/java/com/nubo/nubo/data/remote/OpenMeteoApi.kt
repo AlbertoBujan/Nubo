@@ -1,9 +1,19 @@
 package com.nubo.nubo.data.remote
 
+import com.nubo.nubo.domain.model.ErrorReason
 import org.json.JSONObject
 
-/** Error al hablar con Open-Meteo. */
-class OpenMeteoException(message: String, val statusCode: Int? = null) : Exception(message)
+/**
+ * Error al hablar con Open-Meteo.
+ *
+ * Lleva el **motivo** y no una frase: el texto se resuelve en la interfaz, que
+ * es la única capa que puede traducirlo.
+ */
+class OpenMeteoException(
+    val reason: ErrorReason,
+    val statusCode: Int? = null,
+    cause: Throwable? = null,
+) : Exception(reason.name, cause)
 
 /**
  * Predicción de Open-Meteo.
@@ -28,20 +38,17 @@ class OpenMeteoApi(private val http: HttpClient = HttpClient()) {
         val response = try {
             http.get(url, timeoutSeconds = TIMEOUT_SECONDS)
         } catch (e: Exception) {
-            throw OpenMeteoException("Error de red persistente: ${e.message}", 500)
+            throw OpenMeteoException(ErrorReason.NETWORK, cause = e)
         }
 
         if (!response.isSuccess) {
-            throw OpenMeteoException(
-                "Error del servidor. Código ${response.code}",
-                response.code,
-            )
+            throw OpenMeteoException(ErrorReason.SERVER, response.code)
         }
 
         return try {
             JSONObject(response.decodeText())
         } catch (e: Exception) {
-            throw OpenMeteoException("Respuesta ilegible de Open-Meteo: ${e.message}")
+            throw OpenMeteoException(ErrorReason.UNREADABLE, cause = e)
         }
     }
 
@@ -57,7 +64,13 @@ class OpenMeteoApi(private val http: HttpClient = HttpClient()) {
                 "weather_code,wind_speed_10m,wind_direction_10m,is_day,dew_point_2m," +
                 "apparent_temperature,uv_index"
 
+        // Los cuatro últimos alimentan el desplegable de cada día. Cubren los
+        // siete días y viajan en esta misma petición: el resumen diario sí
+        // existe para UV, sensación y humedad, a diferencia del aire.
         const val DAILY_FIELDS =
-            "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+            "weather_code,temperature_2m_max,temperature_2m_min," +
+                "precipitation_probability_max,uv_index_max," +
+                "apparent_temperature_max,apparent_temperature_min," +
+                "relative_humidity_2m_mean"
     }
 }

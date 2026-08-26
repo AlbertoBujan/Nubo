@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Español. El idioma en el que se escribió la app; el inglés de `values/` es
+     la reserva para todo lo demás. -->
+<resources>
+    <!-- Pantalla principal -->
+    <string name="menu">Menú</string>
+    <string name="now">Ahora</string>
+    <string name="today">Hoy</string>
+    <string name="tomorrow">Mañana</string>
+    <string name="high_low">Máx: %1$s   Mín: %2$s</string>
+    <string name="loading_city">Cargando %1$s…</string>
+    <string name="no_data_for">Sin datos para %1$s</string>
+    <string name="retry">Reintentar</string>
+    <string name="download_data">Descargar datos</string>
+    <string name="welcome_title">¡Bienvenido a Nubo!</string>
+    <string name="welcome_body">Para empezar, añade tu primera ubicación.</string>
+    <string name="add_location">Añadir ubicación</string>
+    <string name="locating">Localizando…</string>
+
+    <!-- Frescura de los datos -->
+    <string name="updated">Actualizado</string>
+    <string name="updated_minutes_ago">Hace %1$d min</string>
+    <string name="updated_hours_ago">Hace %1$d h</string>
+    <string name="updated_days_ago">Hace %1$d d</string>
+
+    <!-- Tarjetas -->
+    <string name="next_hours">Próximas horas</string>
+    <string name="next_days">Próximos días</string>
+    <string name="sun">Sol</string>
+    <string name="expand">Desplegar</string>
+    <string name="collapse">Contraer</string>
+    <string name="air_quality">Calidad del aire</string>
+    <string name="uv_max">UV máximo</string>
+    <string name="humidity_mean">Humedad media</string>
+    <string name="apparent">Sensación</string>
+    <string name="apparent_range">%1$s a %2$s</string>
+    <string name="percent">%1$d %%</string>
+
+    <!-- Menú lateral -->
+    <string name="drawer_gestures">Desliza para eliminar · Mantén pulsado para reordenar</string>
+    <string name="swipe_to_delete">Desliza para eliminar</string>
+    <string name="release_to_delete">Suelta para eliminar</string>
+    <string name="delete_named">Eliminar %1$s</string>
+    <string name="location_removed">%1$s eliminada</string>
+    <string name="location_removed_generic">Ubicación eliminada</string>
+    <string name="undo">Deshacer</string>
+
+    <!-- Ajustes -->
+    <string name="back">Volver</string>
+    <string name="settings">Ajustes</string>
+    <string name="background_updates">Actualización en segundo plano</string>
+    <string name="background_updates_hint">Cada cuánto descarga Nubo la predicción sin abrir la app.</string>
+    <string name="interval_off">Desactivado</string>
+    <string name="interval_12h">Cada 12 horas</string>
+    <string name="interval_24h">Cada 24 horas</string>
+    <string name="application">Aplicación</string>
+    <string name="check_updates">Buscar actualizaciones</string>
+    <string name="about_nubo">Acerca de Nubo</string>
+    <string name="version_label">Versión %1$s</string>
+    <string name="close">Cerrar</string>
+
+    <!-- Actualización de la app -->
+    <string name="update_available">¡Nueva actualización!</string>
+    <string name="update_body">La versión %1$s de Nubo está disponible. ¿Quieres descargarla e instalarla ahora?</string>
+    <string name="update_downloading">Descargando actualización…</string>
+    <string name="update_now">Actualizar</string>
+    <string name="update_later">Más tarde</string>
+
+    <!-- Búsqueda -->
+    <string name="search_location">Buscar localización</string>
+    <string name="search_hint">Escribe un municipio…</string>
+    <string name="use_my_location">Usar mi ubicación actual</string>
+    <string name="search_nearby">Cerca de mí</string>
+    <string name="no_results_for">Sin resultados para \"%1$s\"</string>
+    <string name="add">Añadir</string>
+
+    <!-- Avisos -->
+    <string name="warnings">Avisos meteorológicos</string>
+    <string name="alert_wind">Viento</string>
+    <string name="alert_coastal">Costeros</string>
+    <string name="alert_rain">Lluvia</string>
+    <string name="alert_snow">Nieve</string>
+    <string name="alert_thunderstorm">Tormenta</string>
+    <string name="alert_temperature">Temperaturas</string>
+    <string name="alert_fog">Niebla</string>
+    <string name="alert_dust">Polvo en suspensión</string>
+    <string name="alert_avalanche">Aludes</string>
+    <string name="alert_thaw">Deshielos</string>
+    <string name="level_yellow">Amarillo</string>
+    <string name="level_orange">Naranja</string>
+    <string name="level_red">Rojo</string>
+
+    <!-- Errores -->
+    <string name="error_network">No se pudo contactar con el servidor. Comprueba tu conexión.</string>
+    <string name="error_server">El servicio meteorológico falló (código %1$d).</string>
+    <string name="error_unreadable">El servicio meteorológico devolvió una respuesta ilegible.</string>
+    <string name="error_no_coordinates">No se encontraron coordenadas para esta ubicación.</string>
+    <string name="error_location">No se pudo obtener tu ubicación.</string>
+    <string name="error_location_timeout">No se pudo obtener tu ubicación a tiempo. Comprueba que la localización está activada e inténtalo al aire libre.</string>
+    <string name="error_location_permission">Permiso de ubicación denegado.</string>
+    <string name="error_unknown">Algo ha ido mal.</string>
+
+    <!-- Calidad del aire -->
+    <string name="aqi_good">Buena</string>
+    <string name="aqi_fair">Aceptable</string>
+    <string name="aqi_moderate">Regular</string>
+    <string name="aqi_poor">Mala</string>
+    <string name="aqi_very_poor">Muy mala</string>
+    <string name="aqi_extreme">Extrema</string>
+
+    <!-- Índice ultravioleta -->
+    <string name="uv_low">Bajo</string>
+    <string name="uv_moderate">Moderado</string>
+    <string name="uv_high">Alto</string>
+    <string name="uv_very_high">Muy alto</string>
+    <string name="uv_extreme">Extremo</string>
+
+    <!-- Fases lunares -->
+    <string name="moon_new">Luna nueva</string>
+    <string name="moon_waxing_crescent">Creciente cóncava</string>
+    <string name="moon_first_quarter">Cuarto creciente</string>
+    <string name="moon_waxing_gibbous">Creciente convexa</string>
+    <string name="moon_full">Luna llena</string>
+    <string name="moon_waning_gibbous">Menguante convexa</string>
+    <string name="moon_last_quarter">Cuarto menguante</string>
+    <string name="moon_waning_crescent">Menguante cóncava</string>
+
+    <!-- Estado del cielo -->
+    <string name="sky_clear">Despejado</string>
+    <string name="sky_mostly_clear">Poco nuboso</string>
+    <string name="sky_partly_cloudy">Intervalos nubosos</string>
+    <string name="sky_overcast">Cubierto</string>
+    <string name="sky_fog">Niebla</string>
+    <string name="sky_rime_fog">Niebla escarchada</string>
+    <string name="sky_drizzle_light">Llovizna ligera</string>
+    <string name="sky_drizzle">Llovizna moderada</string>
+    <string name="sky_drizzle_dense">Llovizna densa</string>
+    <string name="sky_freezing_drizzle_light">Llovizna helada ligera</string>
+    <string name="sky_freezing_drizzle_dense">Llovizna helada densa</string>
+    <string name="sky_rain_light">Lluvia débil</string>
+    <string name="sky_rain">Lluvia moderada</string>
+    <string name="sky_rain_heavy">Lluvia fuerte</string>
+    <string name="sky_freezing_rain_light">Lluvia helada débil</string>
+    <string name="sky_freezing_rain_heavy">Lluvia helada fuerte</string>
+    <string name="sky_snow_light">Nieve débil</string>
+    <string name="sky_snow">Nieve moderada</string>
+    <string name="sky_snow_heavy">Nieve fuerte</string>
+    <string name="sky_snow_grains">Granizo menudo</string>
+    <string name="sky_showers_light">Chubascos débiles</string>
+    <string name="sky_showers">Chubascos moderados</string>
+    <string name="sky_showers_heavy">Chubascos fuertes</string>
+    <string name="sky_snow_showers_light">Chubascos de nieve débiles</string>
+    <string name="sky_snow_showers_heavy">Chubascos de nieve fuertes</string>
+    <string name="sky_thunderstorm">Tormenta</string>
+    <string name="sky_thunderstorm_hail">Tormenta con granizo</string>
+    <string name="sky_thunderstorm_hail_heavy">Tormenta con granizo fuerte</string>
+    <string name="sky_unknown">Desconocido</string>
+    <string name="update_checking">Buscando actualizaciones…</string>
+    <string name="update_up_to_date">Estás al día</string>
+    <string name="update_up_to_date_body">Nubo %1$s es la última versión publicada.</string>
+    <string name="update_check_failed">No se pudo comprobar</string>
+    <string name="update_check_failed_body">Nubo no ha podido conectar con GitHub para buscar una versión nueva. Revisa la conexión e inténtalo de nuevo.</string>
+    <string name="about_intro">Nubo muestra la predicción de cualquier lugar del mundo y los avisos meteorológicos oficiales de España.</string>
+    <string name="about_data">Datos</string>
+    <string name="about_data_forecast">Predicción — Open-Meteo. Hora a hora durante las próximas 24 horas y resumen de siete días: temperatura, sensación térmica, punto de rocío, precipitación y su probabilidad, viento, humedad e índice UV.</string>
+    <string name="about_data_air">Calidad del aire — Open-Meteo Air Quality, índice europeo del servicio de atmósfera de Copernicus (CAMS). Su modelo se agota hacia el quinto día, y por eso los últimos días aparecen sin valor.</string>
+    <string name="about_data_alerts">Avisos — AEMET, solo en España. Se cruzan por zona de aviso, que es menor que la provincia: un pueblo del interior no recibe los avisos costeros de su propia provincia.</string>
+    <string name="about_data_places">Lugares — geocodificación de Open-Meteo para la búsqueda; BigDataCloud resuelve el nombre de tu ubicación actual.</string>
+    <string name="about_data_astro">Sol y Luna — se calculan en el teléfono, sin red, en la zona horaria de cada ciudad.</string>
+    <string name="about_privacy">Privacidad</string>
+    <string name="about_privacy_body">Sin cuenta, sin publicidad y sin analítica. Tus ciudades se guardan en el teléfono; de ellas solo viajan las coordenadas, a los proveedores de arriba, para traer los datos que ves.</string>
+    <string name="about_updates">Actualizaciones</string>
+    <string name="about_updates_body">Nubo se distribuye fuera de Google Play: consulta sus publicaciones en GitHub e instala la versión nueva por su cuenta.</string>
+    <string name="about_build">Versión %1$s (build %2$d)</string>
+    <string name="notifications">Notificaciones</string>
+    <string name="alert_notifications">Avisos meteorológicos</string>
+    <string name="alert_notifications_hint">Recibe una notificación cuando se emita un aviso nuevo para alguna de tus ciudades. AEMET solo publica avisos de España.</string>
+    <string name="alert_notifications_schedule">La actualización en segundo plano está apagada, así que Nubo despertará igualmente cada %1$d horas para buscar avisos.</string>
+    <string name="alert_notifications_channel">Avisos meteorológicos nuevos de tus ciudades guardadas.</string>
+    <string name="alert_notification_title">Aviso de %1$s en %2$s</string>
+    <string name="alert_notification_text">Nivel %1$s</string>
+    <string name="notifications_blocked">Las notificaciones están bloqueadas</string>
+    <string name="notifications_blocked_body">Android está bloqueando las notificaciones de Nubo, así que los avisos no pueden llegar. Puedes permitirlas en los ajustes del sistema.</string>
+    <string name="open_settings">Abrir ajustes</string>
+</resources>

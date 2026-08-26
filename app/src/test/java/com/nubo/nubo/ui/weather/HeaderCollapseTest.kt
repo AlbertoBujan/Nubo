@@ -5,14 +5,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Relevo del nombre de la ubicación entre la página y la barra superior.
+ * Viaje del nombre de la ubicación desde la página hasta la barra superior.
  *
- * Lo que se fija aquí es que el nombre pequeño y los puntos de paginación
- * **nunca** estén visibles a la vez. Es la única defensa contra que choquen:
- * los puntos van centrados en la barra y su fila crece con cada ciudad
- * añadida, así que con unas cuantas guardadas se meterían justo donde aterriza
- * el nombre. En vez de medir anchos y confiar en que quepa, se garantiza que
- * no coincidan.
+ * El nombre ya no se apaga en un sitio para encenderse en otro: es uno solo que
+ * se mueve, así que está visible durante todo el recorrido. Eso quita la vieja
+ * defensa contra que choque con los puntos de paginación —que era, justamente,
+ * que nunca coincidieran— y la sustituye por esta: los puntos se han ido del
+ * todo cuando el nombre lleva menos de medio camino, o sea mucho antes de que
+ * llegue a la altura de la barra, que es donde ellos están.
  */
 class HeaderCollapseTest {
 
@@ -20,46 +20,62 @@ class HeaderCollapseTest {
     private val sweep = (0..100).map { it / 100f }
 
     @Test
-    fun `arriba del todo se ven los puntos y no el nombre`() {
+    fun `arriba del todo el nombre esta entero y en su sitio`() {
+        assertEquals(0f, nameTravel(0f), 0f)
+        assertEquals(1f, nameScale(0f), 0f)
         assertEquals(1f, paginationDotsAlpha(0f), 0f)
-        assertEquals(0f, topBarNameAlpha(0f), 0f)
     }
 
     @Test
-    fun `recogida del todo se ve el nombre y no los puntos`() {
+    fun `recogida del todo el nombre esta en la barra y a su tamano`() {
+        assertEquals(1f, nameTravel(1f), 0f)
+        assertEquals(0.6f, nameScale(1f), 1e-6f)
         assertEquals(0f, paginationDotsAlpha(1f), 0f)
-        assertEquals(1f, topBarNameAlpha(1f), 0f)
     }
 
     @Test
-    fun `nombre y puntos nunca se ven a la vez`() {
-        sweep.forEach { collapse ->
-            val name = topBarNameAlpha(collapse)
-            val dots = paginationDotsAlpha(collapse)
-            assertTrue(
-                "en $collapse coinciden nombre=$name y puntos=$dots",
-                name == 0f || dots == 0f,
-            )
-        }
+    fun `los puntos se van antes de que el nombre se acerque a la barra`() {
+        val gone = sweep.first { paginationDotsAlpha(it) == 0f }
+
+        assertTrue("los puntos aguantan hasta $gone del viaje", nameTravel(gone) < 0.5f)
     }
 
     @Test
-    fun `las dos opacidades son monotonas y acotadas`() {
+    fun `el nombre no da saltos ni se sale de escala`() {
         sweep.zipWithNext { previous, next ->
-            assertTrue(topBarNameAlpha(next) >= topBarNameAlpha(previous))
-            assertTrue(paginationDotsAlpha(next) <= paginationDotsAlpha(previous))
+            assertTrue(nameTravel(next) >= nameTravel(previous))
+            assertTrue(nameScale(next) <= nameScale(previous))
+            // Un salto de más de un 2 % con un paso del 1 % sería un tirón.
+            assertTrue(nameTravel(next) - nameTravel(previous) <= 0.02f)
         }
         sweep.forEach {
-            assertTrue(topBarNameAlpha(it) in 0f..1f)
-            assertTrue(paginationDotsAlpha(it) in 0f..1f)
+            assertTrue(nameTravel(it) in 0f..1f)
+            assertTrue(nameScale(it) in 0.6f..1f)
+        }
+    }
+
+    @Test
+    fun `la chincheta solo asoma al final del viaje`() {
+        assertEquals(0f, pinAlpha(0f), 0f)
+        assertEquals(1f, pinAlpha(1f), 0f)
+
+        // Mientras el nombre está de camino no hay chincheta: suelta en mitad
+        // de la pantalla no marcaría nada.
+        sweep.filter { nameTravel(it) < 0.7f }.forEach {
+            assertEquals("chincheta visible en $it", 0f, pinAlpha(it), 0f)
+        }
+        sweep.zipWithNext { previous, next ->
+            assertTrue(pinAlpha(next) >= pinAlpha(previous))
         }
     }
 
     @Test
     fun `un recorrido fuera de rango no descuadra nada`() {
+        assertEquals(0f, nameTravel(-0.5f), 0f)
+        assertEquals(1f, nameTravel(3f), 0f)
         assertEquals(1f, paginationDotsAlpha(-0.5f), 0f)
-        assertEquals(0f, topBarNameAlpha(-0.5f), 0f)
         assertEquals(0f, paginationDotsAlpha(3f), 0f)
-        assertEquals(1f, topBarNameAlpha(3f), 0f)
+        assertEquals(0f, pinAlpha(-0.5f), 0f)
+        assertEquals(1f, pinAlpha(3f), 0f)
     }
 }

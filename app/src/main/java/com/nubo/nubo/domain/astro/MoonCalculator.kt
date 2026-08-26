@@ -9,11 +9,12 @@ import java.time.ZoneId
 data class MoonData(
     val moonrise: LocalDateTime?,
     val moonset: LocalDateTime?,
-    /** 0 = nueva, 0.5 = llena. */
-    val phase: Double,
+    /** Posición en el ciclo: 0 = nueva, 0.5 = llena. */
+    val cycle: Double,
     /** Fracción del disco iluminada, 0..1. */
     val illumination: Double,
-    val phaseName: String,
+    /** Fase con la que se nombra esa posición. */
+    val phase: MoonPhase,
 )
 
 /** Calcula fase, iluminación y orto/ocaso lunar. */
@@ -62,9 +63,9 @@ object MoonCalculator {
         return MoonData(
             moonrise = moonrise,
             moonset = moonset,
-            phase = illumination.phase,
+            cycle = illumination.phase,
             illumination = illumination.fraction,
-            phaseName = phaseName(illumination.phase),
+            phase = phaseOf(illumination.phase),
         )
     }
 
@@ -126,14 +127,14 @@ object MoonCalculator {
     }
 
     /** Nombre de la fase lunar en español. */
-    fun phaseName(phase: Double): String = when {
-        phase < 0.03 || phase > 0.97 -> "Luna nueva"
-        phase < 0.22 -> "Creciente cóncava"
-        phase < 0.28 -> "Cuarto creciente"
-        phase < 0.47 -> "Creciente convexa"
-        phase < 0.53 -> "Luna llena"
-        phase < 0.72 -> "Menguante convexa"
-        phase < 0.78 -> "Cuarto menguante"
-        else -> "Menguante cóncava"
+    fun phaseOf(phase: Double): MoonPhase = when {
+        phase < 0.03 || phase > 0.97 -> MoonPhase.NEW
+        phase < 0.22 -> MoonPhase.WAXING_CRESCENT
+        phase < 0.28 -> MoonPhase.FIRST_QUARTER
+        phase < 0.47 -> MoonPhase.WAXING_GIBBOUS
+        phase < 0.53 -> MoonPhase.FULL
+        phase < 0.72 -> MoonPhase.WANING_GIBBOUS
+        phase < 0.78 -> MoonPhase.LAST_QUARTER
+        else -> MoonPhase.WANING_CRESCENT
     }
 }

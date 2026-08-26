@@ -10,18 +10,17 @@ import kotlin.math.roundToInt
  * —incluidos sitios donde no hay estaciones— a partir del modelo CAMS, así que
  * esta escala vale igual en Curtis que en Nairobi.
  *
- * Las etiquetas son versiones cortas de las oficiales, que no caben en una
- * casilla de media tarjeta: la EAQI dice "razonablemente buena", "desfavorable"
- * y "extremadamente desfavorable" donde aquí pone "aceptable", "mala" y
- * "extrema".
+ * Los nombres que se enseñan son versiones cortas de los oficiales, que no
+ * caben en una casilla de media tarjeta, y viven en los recursos: la EAQI dice
+ * "razonablemente buena" y "desfavorable" donde aquí pone "aceptable" y "mala".
  */
-enum class AirQualityBand(val label: String, private val upperBound: Int) {
-    GOOD("Buena", 20),
-    FAIR("Aceptable", 40),
-    MODERATE("Regular", 60),
-    POOR("Mala", 80),
-    VERY_POOR("Muy mala", 100),
-    EXTREME("Extrema", Int.MAX_VALUE),
+enum class AirQualityBand(private val upperBound: Int) {
+    GOOD(20),
+    FAIR(40),
+    MODERATE(60),
+    POOR(80),
+    VERY_POOR(100),
+    EXTREME(Int.MAX_VALUE),
     ;
 
     /** Si conviene reducir la exposición al aire libre. */
@@ -47,12 +46,12 @@ enum class AirQualityBand(val label: String, private val upperBound: Int) {
  * Open-Meteo lo da con decimales; se redondea antes de clasificar porque los
  * tramos oficiales están definidos sobre enteros.
  */
-enum class UvBand(val label: String, private val upperBound: Int) {
-    LOW("Bajo", 2),
-    MODERATE("Moderado", 5),
-    HIGH("Alto", 7),
-    VERY_HIGH("Muy alto", 10),
-    EXTREME("Extremo", Int.MAX_VALUE),
+enum class UvBand(private val upperBound: Int) {
+    LOW(2),
+    MODERATE(5),
+    HIGH(7),
+    VERY_HIGH(10),
+    EXTREME(Int.MAX_VALUE),
     ;
 
     /** A partir de aquí la OMS recomienda protección. */

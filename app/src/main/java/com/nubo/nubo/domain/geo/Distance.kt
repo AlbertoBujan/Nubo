@@ -41,6 +41,8 @@ fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
  */
 fun formatDistance(km: Double): String = when {
     km < 1 -> "${(km * 1000).toInt()} m"
-    km < 10 -> "%.1f km".format(java.util.Locale("es", "ES"), km)
+    // El separador decimal sale del idioma del teléfono: "8,4 km" en español
+    // y "8.4 km" en inglés.
+    km < 10 -> "%.1f km".format(java.util.Locale.getDefault(), km)
     else -> "${km.toInt()} km"
 }

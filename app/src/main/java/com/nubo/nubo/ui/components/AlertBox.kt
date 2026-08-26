@@ -1,5 +1,7 @@
 package com.nubo.nubo.ui.components
 
+import com.nubo.nubo.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,6 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nubo.nubo.domain.model.AlertType
 import com.nubo.nubo.domain.model.WeatherAlert
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -51,18 +54,18 @@ fun AlertBox(
 ) {
     if (alerts.isEmpty()) return
 
-    val grouped = remember(alerts) { alerts.groupBy { normalizeType(it.event) } }
+    val grouped = remember(alerts) { alerts.groupBy { AlertType.of(it.event) } }
 
     Column(modifier.fillMaxWidth()) {
-        grouped.forEach { (title, group) ->
-            AlertGroupTile(title = title, alerts = group)
+        grouped.forEach { (type, group) ->
+            AlertGroupTile(type = type, alerts = group)
             Spacer(Modifier.height(8.dp))
         }
     }
 }
 
 @Composable
-private fun AlertGroupTile(title: String, alerts: List<WeatherAlert>) {
+private fun AlertGroupTile(type: AlertType, alerts: List<WeatherAlert>) {
     var expanded by remember { mutableStateOf(false) }
 
     // El grupo se pinta con el color del aviso más grave que contiene.
@@ -83,10 +86,10 @@ private fun AlertGroupTile(title: String, alerts: List<WeatherAlert>) {
                     .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(iconForType(title), null, tint = color, modifier = Modifier.size(20.dp))
+                Icon(iconForType(type), null, tint = color, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    title,
+                    stringResource(type.labelRes),
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.W600,
@@ -128,7 +131,7 @@ private fun AlertGroupTile(title: String, alerts: List<WeatherAlert>) {
 @Composable
 private fun AlertDetail(alert: WeatherAlert) {
     val formatter = remember {
-        DateTimeFormatter.ofPattern("EEE d, HH:mm", Locale.forLanguageTag("es-ES"))
+        DateTimeFormatter.ofPattern("EEE d, HH:mm")
     }
 
     Column(
@@ -173,23 +176,6 @@ private fun AlertDetail(alert: WeatherAlert) {
     }
 }
 
-/** Agrupa los eventos de AEMET en familias legibles. */
-internal fun normalizeType(event: String): String {
-    val lower = event.lowercase()
-    return when {
-        lower.contains("viento") -> "Viento"
-        lower.contains("costero") -> "Costeros"
-        lower.contains("lluvia") || lower.contains("precipita") -> "Lluvia"
-        lower.contains("nieve") || lower.contains("nevada") -> "Nieve"
-        lower.contains("tormenta") -> "Tormenta"
-        lower.contains("temperatura") -> "Temperaturas"
-        lower.contains("niebla") -> "Niebla"
-        lower.contains("polvo") -> "Polvo en suspensión"
-        lower.contains("alud") -> "Aludes"
-        lower.contains("deshielo") -> "Deshielos"
-        else -> "Avisos meteorológicos"
-    }
-}
 
 /**
  * Icono del fenómeno.
@@ -197,13 +183,13 @@ internal fun normalizeType(event: String): String {
  * Se comparte con el carrusel horario para que un aviso de viento se vea igual
  * en la tarjeta desplegable y en la hora concreta a la que afecta.
  */
-internal fun iconForType(title: String): ImageVector = when (title) {
-    "Viento" -> Icons.Outlined.Air
-    "Costeros" -> Icons.Outlined.Waves
-    "Lluvia" -> Icons.Outlined.WaterDrop
-    "Nieve" -> Icons.Outlined.AcUnit
-    "Tormenta" -> Icons.Outlined.Bolt
-    "Temperaturas" -> Icons.Outlined.Thermostat
-    "Niebla" -> Icons.Outlined.CloudQueue
+internal fun iconForType(type: AlertType): ImageVector = when (type) {
+    AlertType.WIND -> Icons.Outlined.Air
+    AlertType.COASTAL -> Icons.Outlined.Waves
+    AlertType.RAIN -> Icons.Outlined.WaterDrop
+    AlertType.SNOW -> Icons.Outlined.AcUnit
+    AlertType.THUNDERSTORM -> Icons.Outlined.Bolt
+    AlertType.TEMPERATURE -> Icons.Outlined.Thermostat
+    AlertType.FOG -> Icons.Outlined.CloudQueue
     else -> Icons.Outlined.Warning
 }

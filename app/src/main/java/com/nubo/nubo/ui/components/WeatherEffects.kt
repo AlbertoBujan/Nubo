@@ -87,6 +87,12 @@ private data class Drop(
 @Composable
 fun WeatherEffectsOverlay(
     effect: WeatherEffect,
+    /**
+     * Opacidad impuesta desde fuera, para desvanecer el efecto al pasar de
+     * ciudad. Se multiplica por la intensidad propia, que es la que gobierna
+     * la entrada y la salida cuando el tiempo cambia sin más.
+     */
+    alpha: Float = 1f,
     modifier: Modifier = Modifier,
 ) {
     // Semilla fija: el patrón debe ser estable entre recomposiciones para que
@@ -134,12 +140,13 @@ fun WeatherEffectsOverlay(
         }
     }
 
-    if (intensity <= 0f) {
+    val visibility = intensity * alpha.coerceIn(0f, 1f)
+    if (visibility <= 0f) {
         Box(modifier)
         return
     }
 
-    val flashAlpha = if (effect.hasFlashes) flashAlphaAt(elapsed, flashes) * intensity else 0f
+    val flashAlpha = if (effect.hasFlashes) flashAlphaAt(elapsed, flashes) * visibility else 0f
 
     Canvas(modifier = modifier.fillMaxSize()) {
         if (flashAlpha > 0f) {
@@ -149,7 +156,7 @@ fun WeatherEffectsOverlay(
         for (drop in drops) {
             // Recorrido normalizado que se repite: función pura del tiempo.
             val travel = (drop.phase + elapsed * effect.speed * drop.depth) % 1f
-            val alpha = effect.opacity * drop.depth * intensity
+            val alpha = effect.opacity * drop.depth * visibility
 
             if (effect.isSnow) {
                 // El copo no cae recto: se balancea. Sin ese vaivén los puntos

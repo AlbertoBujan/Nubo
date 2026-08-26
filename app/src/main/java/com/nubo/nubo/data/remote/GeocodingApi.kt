@@ -25,13 +25,11 @@ class GeocodingApi(private val http: HttpClient = HttpClient()) {
         val url = buildString {
             append(BASE_URL).append("/search?name=").append(encode(trimmed))
             append("&count=").append(limit)
-            // En español, aunque devuelva la forma oficial larga de cada
-            // división ("Comunidad Autónoma de Galicia"), que hay que podar.
-            // Sin este parámetro llegan más cortas pero **en inglés**:
-            // "Canary Islands", "Andalusia", "Basque Country". Para una
-            // interfaz en español eso es peor que la morralla, que sí se
-            // puede quitar.
-            append("&language=es&format=json")
+            // En el idioma de la app. En español devuelve la forma oficial
+            // larga de cada división ("Comunidad Autónoma de Galicia") y en
+            // inglés otra distinta ("Province of A Coruña"); las dos se podan
+            // en `trimAdminPrefix`, que por eso tiene reglas de ambos idiomas.
+            append("&language=").append(apiLanguage()).append("&format=json")
         }
 
         val response = runCatching { http.get(url, timeoutSeconds = TIMEOUT_SECONDS) }

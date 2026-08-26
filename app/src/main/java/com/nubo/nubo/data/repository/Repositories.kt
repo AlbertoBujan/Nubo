@@ -10,6 +10,7 @@ import com.nubo.nubo.data.remote.OpenMeteoApi
 import com.nubo.nubo.data.remote.ReverseGeocodingApi
 import com.nubo.nubo.domain.model.AirQualityForecast
 import com.nubo.nubo.domain.model.DailyForecast
+import com.nubo.nubo.domain.model.ErrorReason
 import com.nubo.nubo.domain.model.HourlyForecast
 import com.nubo.nubo.domain.model.SavedLocation
 import com.nubo.nubo.domain.model.WeatherAlert
@@ -35,7 +36,7 @@ data class WeatherForecastResult(
     val airQualityRawJson: JSONObject? = null,
 )
 
-class WeatherRepositoryException(message: String) : Exception(message)
+class WeatherRepositoryException(val reason: ErrorReason) : Exception(reason.name)
 
 // ── Localización ────────────────────────────────────────────────────────────
 
@@ -132,9 +133,7 @@ class WeatherRepositoryImpl(
             val lat = location.lat
             val lon = location.lon
             if (lat == null || lon == null) {
-                throw WeatherRepositoryException(
-                    "No se encontraron coordenadas para la ubicación",
-                )
+                throw WeatherRepositoryException(ErrorReason.NO_COORDINATES)
             }
 
             // Las dos peticiones salen a la vez: encadenarlas duplicaría el

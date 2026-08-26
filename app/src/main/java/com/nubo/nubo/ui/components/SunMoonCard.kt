@@ -1,5 +1,7 @@
 package com.nubo.nubo.ui.components
 
+import com.nubo.nubo.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -60,7 +62,7 @@ fun SunMoonCard(
 ) {
     if (sunTimes == null) return
 
-    val formatter = DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.forLanguageTag("es-ES"))
+    val formatter = DateTimeFormatter.ofPattern("HH:mm")
 
     // IntrinsicSize.Min mide la más alta y estira la otra hasta igualarla, de
     // modo que las dos tarjetas quedan siempre simétricas aunque el nombre de
@@ -72,7 +74,7 @@ fun SunMoonCard(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ArcCard(
-            title = "Sol",
+            title = stringResource(R.string.sun),
             icon = Icons.Outlined.WbSunny,
             iconTint = Color(0xFFFFC107),
             start = sunTimes.sunrise,
@@ -89,7 +91,7 @@ fun SunMoonCard(
 
         if (moonData?.moonrise != null && moonData.moonset != null) {
             ArcCard(
-                title = moonData.phaseName,
+                title = stringResource(moonData.phase.labelRes),
                 icon = Icons.Outlined.DarkMode,
                 iconTint = Color(0xFFB0BEC5),
                 start = moonData.moonrise,

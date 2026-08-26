@@ -7,10 +7,10 @@ import java.time.ZoneId
 import java.time.format.DateTimeParseException
 
 /** Nivel de un aviso de AEMET, ordenado por gravedad. */
-enum class AlertLevel(val label: String, val severity: Int) {
-    YELLOW("Amarillo", 1),
-    ORANGE("Naranja", 2),
-    RED("Rojo", 3),
+enum class AlertLevel(val severity: Int) {
+    YELLOW(1),
+    ORANGE(2),
+    RED(3),
     ;
 
     companion object {

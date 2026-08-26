@@ -21,7 +21,7 @@ class ReverseGeocodingApi(private val http: HttpClient = HttpClient()) {
     /** Sitio habitado más cercano a unas coordenadas, o `null`. */
     suspend fun findPlace(lat: Double, lon: Double): SavedLocation? {
         val url = "$BASE_URL/data/reverse-geocode-client" +
-            "?latitude=$lat&longitude=$lon&localityLanguage=es"
+            "?latitude=$lat&longitude=$lon&localityLanguage=${apiLanguage()}"
 
         val response = runCatching { http.get(url, timeoutSeconds = TIMEOUT_SECONDS) }
             .getOrNull() ?: return null

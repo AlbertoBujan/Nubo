@@ -202,3 +202,55 @@ class LightningTest {
         assertEquals(0f, flashAlphaAt(times.first() + 1f, times), 0f)
     }
 }
+
+/**
+ * Resistencia en los topes del carrusel horario.
+ *
+ * Sin ella, llegar al principio o al final dejaba el gesto completamente
+ * muerto: el sobrante se consume para que no cambie de ciudad, y no pasaba
+ * nada de nada.
+ */
+class EdgePullTest {
+
+    private val limit = 80f
+
+    @Test
+    fun `por mucho que se empuje nunca se pasa del tope`() {
+        // Se acerca al tope asintóticamente y se queda ahí: en `Float`, a
+        // partir de unas pocas veces el tope la tangente ya redondea a uno.
+        listOf(100f, 1_000f, 100_000f).forEach { raw ->
+            val pull = edgePull(raw, limit)
+            assertTrue("con $raw se fue a $pull", pull <= limit)
+        }
+        assertTrue(edgePull(100f, limit) < limit)
+    }
+
+    @Test
+    fun `cuesta cada vez mas, pero siempre avanza algo`() {
+        var previous = 0f
+        (1..60).forEach { step ->
+            val pull = edgePull(step * 10f, limit)
+            assertTrue("retrocede en $step", pull > previous)
+            previous = pull
+        }
+        // El primer tramo se nota casi entero y el último ya casi nada.
+        val primeros = edgePull(10f, limit) - edgePull(0f, limit)
+        val ultimos = edgePull(600f, limit) - edgePull(590f, limit)
+        assertTrue("no amortigua", primeros > ultimos * 10)
+    }
+
+    @Test
+    fun `empujar hacia el otro lado mueve hacia el otro lado`() {
+        assertEquals(-edgePull(50f, limit), edgePull(-50f, limit), 0.001f)
+    }
+
+    @Test
+    fun `sin empujar no se mueve`() {
+        assertEquals(0f, edgePull(0f, limit), 0f)
+    }
+
+    @Test
+    fun `antes de medir la tarjeta no se mueve nada`() {
+        assertEquals(0f, edgePull(500f, 0f), 0f)
+    }
+}

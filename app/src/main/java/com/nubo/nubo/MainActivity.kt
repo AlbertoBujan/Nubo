@@ -1,8 +1,12 @@
 package com.nubo.nubo
 
 import android.Manifest
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,9 +28,12 @@ import com.nubo.nubo.di.ServiceLocator
 import com.nubo.nubo.ui.theme.NuboTheme
 import com.nubo.nubo.ui.weather.AppDrawer
 import com.nubo.nubo.ui.weather.SearchLocationSheet
-import com.nubo.nubo.ui.weather.SettingsSheet
 import com.nubo.nubo.ui.weather.UpdateDialog
+import com.nubo.nubo.data.remote.UpdateService
 import com.nubo.nubo.ui.weather.AboutDialog
+import com.nubo.nubo.ui.weather.CheckingUpdatesDialog
+import com.nubo.nubo.ui.weather.NotificationsBlockedDialog
+import com.nubo.nubo.ui.weather.UpdateCheckDialog
 import com.nubo.nubo.ui.weather.WeatherScreen
 import com.nubo.nubo.ui.weather.WeatherViewModel
 import com.nubo.nubo.work.BackgroundUpdateWorker
@@ -44,12 +51,34 @@ class MainActivity : ComponentActivity() {
         onPermissionResult = null
     }
 
+    private var onNotificationPermissionResult: ((Boolean) -> Unit)? = null
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        onNotificationPermissionResult?.invoke(granted)
+        onNotificationPermissionResult = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             NuboTheme {
                 NuboApp(
+                    requestNotificationPermission = { callback ->
+                        // Antes de Android 13 no existe el permiso: pedirlo no
+                        // abriría ningún diálogo y el interruptor se quedaría
+                        // esperando una respuesta que no llega.
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                            callback(true)
+                        } else {
+                            onNotificationPermissionResult = callback
+                            notificationPermissionLauncher.launch(
+                                Manifest.permission.POST_NOTIFICATIONS,
+                            )
+                        }
+                    },
                     requestLocationPermission = { callback ->
                         onPermissionResult = callback
                         locationPermissionLauncher.launch(
@@ -66,7 +95,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun NuboApp(requestLocationPermission: ((Boolean) -> Unit) -> Unit) {
+private fun NuboApp(
+    requestLocationPermission: ((Boolean) -> Unit) -> Unit,
+    requestNotificationPermission: ((Boolean) -> Unit) -> Unit,
+) {
     val context = LocalContext.current
     val viewModel: WeatherViewModel = viewModel(
         factory = ServiceLocator.weatherViewModelFactory(context),
@@ -77,24 +109,45 @@ private fun NuboApp(requestLocationPermission: ((Boolean) -> Unit) -> Unit) {
     val scope = rememberCoroutineScope()
 
     var showSearch by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+    var drawerSettings by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<AvailableUpdate?>(null) }
+    // Solo la comprobación **manual** informa de que no hay novedades: la del
+    // arranque no la ha pedido nadie y no debe interrumpir para decir que no
+    // pasa nada.
+    var manualCheck by remember { mutableStateOf<UpdateService.UpdateCheck?>(null) }
+    var checking by remember { mutableStateOf(false) }
+    var notificationsBlocked by remember { mutableStateOf(false) }
 
     val updateService = remember(context) { ServiceLocator.updateService(context) }
 
     // La comprobación de actualizaciones va al arrancar, una sola vez.
     LaunchedEffect(Unit) {
-        update = updateService.checkForUpdates()
+        (updateService.checkForUpdates() as? UpdateService.UpdateCheck.Available)?.let {
+            update = it.update
+        }
     }
 
     // La tarea periódica se reprograma con la preferencia guardada: WorkManager
     // pierde su registro tras reinstalar la app.
-    LaunchedEffect(state.backgroundInterval, state.isInitialized) {
+    LaunchedEffect(state.backgroundInterval, state.alertNotifications, state.isInitialized) {
         if (state.isInitialized) {
-            BackgroundUpdateWorker.schedule(context, state.backgroundInterval)
+            BackgroundUpdateWorker.schedule(
+                context,
+                state.backgroundInterval,
+                state.alertNotifications,
+            )
         }
     }
+
+    // Los ajustes son el otro contenido del cajón, no un destino: al cerrarlo
+    // vuelve a lo que se abre por defecto, la lista de ubicaciones.
+    LaunchedEffect(drawerState.isOpen) {
+        if (!drawerState.isOpen) drawerSettings = false
+    }
+
+    // Estando en los ajustes, atrás vuelve a la lista en vez de cerrar el menú.
+    BackHandler(enabled = drawerState.isOpen && drawerSettings) { drawerSettings = false }
 
     fun locateThenAdd() {
         requestLocationPermission { granted ->
@@ -107,6 +160,9 @@ private fun NuboApp(requestLocationPermission: ((Boolean) -> Unit) -> Unit) {
         drawerContent = {
             AppDrawer(
                 state = state,
+                interval = state.backgroundInterval,
+                showSettings = drawerSettings,
+                onToggleSettings = { drawerSettings = it },
                 onSelectCity = { index ->
                     viewModel.onPageSettled(index)
                     scope.launch { drawerState.close() }
@@ -118,9 +174,37 @@ private fun NuboApp(requestLocationPermission: ((Boolean) -> Unit) -> Unit) {
                     showSearch = true
                     scope.launch { drawerState.close() }
                 },
-                // Los ajustes se abren **sobre** el menú, sin cerrarlo: al
-                // volver de ellos se sigue viendo la lista de ubicaciones.
-                onOpenSettings = { showSettings = true },
+                onIntervalChange = viewModel::setBackgroundInterval,
+                alertNotifications = state.alertNotifications,
+                onAlertNotificationsChange = { enabled ->
+                    if (!enabled) {
+                        viewModel.setAlertNotifications(false)
+                    } else {
+                        // El interruptor no se enciende hasta que el sistema
+                        // concede el permiso: quedaría encendido sin que
+                        // llegase nunca una notificación.
+                        requestNotificationPermission { granted ->
+                            if (granted) {
+                                viewModel.setAlertNotifications(true)
+                            } else {
+                                notificationsBlocked = true
+                            }
+                        }
+                    }
+                },
+                onCheckUpdates = {
+                    scope.launch {
+                        checking = true
+                        drawerState.close()
+                        val result = updateService.checkForUpdates()
+                        checking = false
+                        when (result) {
+                            is UpdateService.UpdateCheck.Available -> update = result.update
+                            else -> manualCheck = result
+                        }
+                    }
+                },
+                onShowAbout = { showAbout = true },
             )
         },
     ) {
@@ -167,22 +251,25 @@ private fun NuboApp(requestLocationPermission: ((Boolean) -> Unit) -> Unit) {
         )
     }
 
-    if (showSettings) {
-        SettingsSheet(
-            interval = state.backgroundInterval,
-            onIntervalChange = viewModel::setBackgroundInterval,
-            onCheckUpdates = {
-                showSettings = false
-                scope.launch {
-                    update = updateService.checkForUpdates()
-                    drawerState.close()
-                }
+    if (checking) {
+        CheckingUpdatesDialog()
+    }
+
+    manualCheck?.let { result ->
+        UpdateCheckDialog(result = result, onDismiss = { manualCheck = null })
+    }
+
+    if (notificationsBlocked) {
+        NotificationsBlockedDialog(
+            onOpenSettings = {
+                notificationsBlocked = false
+                context.startActivity(
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    },
+                )
             },
-            onShowAbout = {
-                showSettings = false
-                showAbout = true
-            },
-            onDismiss = { showSettings = false },
+            onDismiss = { notificationsBlocked = false },
         )
     }
 

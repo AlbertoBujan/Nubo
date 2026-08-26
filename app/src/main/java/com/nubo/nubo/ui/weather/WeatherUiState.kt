@@ -3,13 +3,17 @@ package com.nubo.nubo.ui.weather
 import com.nubo.nubo.domain.astro.MoonData
 import com.nubo.nubo.domain.astro.SunTimes
 import com.nubo.nubo.domain.model.AirQualityForecast
+import com.nubo.nubo.domain.model.CityError
 import com.nubo.nubo.domain.model.DailyForecast
 import com.nubo.nubo.domain.model.HourlyForecast
 import com.nubo.nubo.domain.model.SavedLocation
 import com.nubo.nubo.domain.model.zoneOf
 import com.nubo.nubo.domain.model.WeatherAlert
 import com.nubo.nubo.domain.weather.SkyCondition
+import com.nubo.nubo.domain.weather.WeatherCode
+import com.nubo.nubo.domain.weather.WeatherDescription
 import com.nubo.nubo.domain.weather.SunPhase
+import com.nubo.nubo.domain.weather.sunPhaseAt
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -30,7 +34,7 @@ data class CityWeather(
      */
     val timeZone: String? = null,
     val isLoading: Boolean = false,
-    val error: String? = null,
+    val error: CityError? = null,
     val daily: List<DailyForecast> = emptyList(),
     val hourly: List<HourlyForecast> = emptyList(),
     val alerts: List<WeatherAlert> = emptyList(),
@@ -69,41 +73,43 @@ data class CityWeather(
 
     val currentTemperature: Int? get() = closestHour?.temperature
     val skyCode: String get() = closestHour?.skyStateCode.orEmpty()
-    val skyDescription: String get() = closestHour?.skyDescription.orEmpty()
+    /** Fenómeno de la hora en curso; su texto lo resuelve la interfaz. */
+    val skyDescription: WeatherDescription
+        get() = WeatherCode.fromCode(skyCode).description
     val skyCondition: SkyCondition get() = SkyCondition.fromCode(skyCode)
+
+    /**
+     * Fase solar **de este sitio**, con su propio reloj.
+     *
+     * No hay una fase solar de la aplicación. Cuando la había, deslizar de A
+     * Coruña a Toronto pintaba Toronto con el gradiente de mediodía y las
+     * estrellas encima: el cielo salía del estado global —la fase de la ciudad
+     * activa— mientras las estrellas salían del código horario de Toronto, que
+     * sí es por sitio. Dos fuentes distintas para lo mismo.
+     */
+    val sunPhase: SunPhase get() = sunPhaseAt(sunTimes, nowThere)
 
     /** Viento de la hora en curso; mueve las nubes del fondo. */
     val windSpeed: Int? get() = closestHour?.windSpeed
     val windDegrees: Int? get() = closestHour?.windDirectionDegrees
 
-    // ── Condiciones de ahora mismo ──────────────────────────────────────────
-
-    val humidity: Int? get() = closestHour?.humidity
-    val apparentTemperature: Int? get() = closestHour?.apparentTemperature
-    val uvIndex: Double? get() = closestHour?.uvIndex
+    // ── Condiciones por día ─────────────────────────────────────────────────
 
     /**
-     * Calidad del aire de la hora en curso.
+     * Peor índice de calidad del aire de cada día.
      *
-     * Se elige la muestra más próxima igual que con la predicción, y no el
-     * primer elemento de la lista, porque al releer la caché unas horas
-     * después el principio de la serie ya ha quedado atrás.
+     * Se agrega aquí porque su API no tiene bloque diario, solo la serie
+     * horaria. Se toma el **máximo** y no la media: de un día lo que importa
+     * es lo malo que llegó a ponerse, que es además como se publica
+     * habitualmente el índice europeo.
+     *
+     * Los días que el modelo no alcanza —a partir del quinto, más o menos—
+     * simplemente no aparecen en el mapa, y su casilla enseña un guion.
      */
-    val airQualityIndex: Int?
-        get() {
-            if (airQuality.isEmpty()) return null
-            val now = nowThere
-            return airQuality.minByOrNull {
-                Duration.between(it.dateTime, now).abs().toMillis()
-            }?.europeanAqi
-        }
-
-    /** Si hay algo que enseñar en la tarjeta de condiciones. */
-    val hasConditions: Boolean
-        get() = airQualityIndex != null ||
-            uvIndex != null ||
-            humidity != null ||
-            apparentTemperature != null
+    val airQualityByDay: Map<LocalDate, Int>
+        get() = airQuality
+            .groupBy { it.dateTime.toLocalDate() }
+            .mapValues { (_, samples) -> samples.maxOf { it.europeanAqi } }
 
     val hasData: Boolean get() = daily.isNotEmpty() && hourly.isNotEmpty()
 
@@ -116,25 +122,36 @@ data class CityWeather(
             return day.tempMax to day.tempMin
         }
 
-    /** "Hace 5 min", "Hace 2 h"… para el indicador de frescura. */
-    val lastRefreshText: String
+    /**
+     * Antigüedad de los datos, para el indicador de frescura.
+     *
+     * Devuelve la magnitud y su unidad, no la frase: "hace 5 min" y "5 min
+     * ago" no se diferencian solo en las palabras, también en el orden, así
+     * que armarla aquí impediría traducirla. `null` si nunca se ha cargado.
+     */
+    val dataAge: DataAge?
         get() {
-            val updated = lastUpdated ?: return ""
+            val updated = lastUpdated ?: return null
             val diff = Duration.between(updated, LocalDateTime.now())
             return when {
-                diff.toDays() >= 1 -> "Hace ${diff.toDays()} d"
-                diff.toHours() >= 1 -> "Hace ${diff.toHours()} h"
-                diff.toMinutes() >= 1 -> "Hace ${diff.toMinutes()} min"
-                else -> "Actualizado"
+                diff.toDays() >= 1 -> DataAge(AgeUnit.DAYS, diff.toDays())
+                diff.toHours() >= 1 -> DataAge(AgeUnit.HOURS, diff.toHours())
+                diff.toMinutes() >= 1 -> DataAge(AgeUnit.MINUTES, diff.toMinutes())
+                else -> DataAge(AgeUnit.JUST_NOW, 0)
             }
         }
 }
 
+/** Antigüedad de los datos: cuánto y de qué. */
+data class DataAge(val unit: AgeUnit, val amount: Long)
+
+enum class AgeUnit { JUST_NOW, MINUTES, HOURS, DAYS }
+
 /** Cada cuánto se refresca el tiempo en segundo plano. */
-enum class BackgroundInterval(val label: String, val hours: Long?) {
-    OFF("Desactivado", null),
-    EVERY_12H("Cada 12 horas", 12),
-    EVERY_24H("Cada 24 horas", 24),
+enum class BackgroundInterval(val hours: Long?) {
+    OFF(null),
+    EVERY_12H(12),
+    EVERY_24H(24),
 }
 
 /**
@@ -164,7 +181,15 @@ data class WeatherUiState(
     val locations: List<SavedLocation> = emptyList(),
     val cities: Map<String, CityWeather> = emptyMap(),
     val currentIndex: Int = 0,
-    val sunPhase: SunPhase = SunPhase.DAY,
+    /**
+     * Contador que avanza cada minuto.
+     *
+     * No lo lee nadie: existe para que el estado se vuelva a emitir y la
+     * interfaz relea las fases solares, que dependen de la hora y no de
+     * ningún dato guardado. Antes aquí había una `sunPhase` global, que es
+     * justo lo que no puede haber con ciudades en husos distintos.
+     */
+    val clockTick: Int = 0,
     val isRefreshing: Boolean = false,
     val isLocating: Boolean = false,
     val searchResults: List<SearchResult> = emptyList(),
@@ -172,6 +197,8 @@ data class WeatherUiState(
     /** Si los resultados se ordenan por cercanía en vez de por relevancia. */
     val searchNearby: Boolean = false,
     val backgroundInterval: BackgroundInterval = BackgroundInterval.OFF,
+    /** Avisar por notificación de los avisos nuevos. Solo España. */
+    val alertNotifications: Boolean = false,
     val isInitialized: Boolean = false,
 ) {
     val currentLocation: SavedLocation? get() = locations.getOrNull(currentIndex)

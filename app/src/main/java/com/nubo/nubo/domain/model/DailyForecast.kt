@@ -16,8 +16,18 @@ data class DailyForecast(
     val tempMin: Int?,
     /** Código WMO representativo del día, ya sin sufijo nocturno. */
     val skyStateCode: String,
-    val skyDescription: String,
     val precipitationProbability: Int?,
+    /**
+     * Resumen de condiciones del día, para el desplegable.
+     *
+     * Son campos del bloque `daily` de la misma llamada que ya se hacía, así
+     * que cubren los siete días sin coste de red. La calidad del aire no está
+     * aquí: vive en otra API que no tiene bloque diario y se agrega aparte.
+     */
+    val uvIndexMax: Double? = null,
+    val apparentMax: Int? = null,
+    val apparentMin: Int? = null,
+    val humidityMean: Int? = null,
 ) {
     companion object {
 
@@ -39,6 +49,10 @@ data class DailyForecast(
             val tempMax = daily.optJSONArray("temperature_2m_max")
             val tempMin = daily.optJSONArray("temperature_2m_min")
             val precipProb = daily.optJSONArray("precipitation_probability_max")
+            val uvMax = daily.optJSONArray("uv_index_max")
+            val apparentMax = daily.optJSONArray("apparent_temperature_max")
+            val apparentMin = daily.optJSONArray("apparent_temperature_min")
+            val humidityMean = daily.optJSONArray("relative_humidity_2m_mean")
 
             val hoursByDay = hourlySamplesByDay(json)
             val forecasts = mutableListOf<DailyForecast>()
@@ -58,8 +72,11 @@ data class DailyForecast(
                     tempMax = tempMax?.optDoubleOrNull(i)?.roundToInt(),
                     tempMin = tempMin?.optDoubleOrNull(i)?.roundToInt(),
                     skyStateCode = code ?: "",
-                    skyDescription = WeatherCode.fromCode(code).description,
                     precipitationProbability = precipProb?.optDoubleOrNull(i)?.roundToInt(),
+                    uvIndexMax = uvMax?.optDoubleOrNull(i),
+                    apparentMax = apparentMax?.optDoubleOrNull(i)?.roundToInt(),
+                    apparentMin = apparentMin?.optDoubleOrNull(i)?.roundToInt(),
+                    humidityMean = humidityMean?.optDoubleOrNull(i)?.roundToInt(),
                 )
             }
 

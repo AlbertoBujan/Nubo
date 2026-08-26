@@ -1,5 +1,6 @@
 package com.nubo.nubo.data.location
 
+import com.nubo.nubo.domain.model.ErrorReason
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -14,8 +15,13 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
-/** Error de geolocalización con un mensaje ya apto para enseñar al usuario. */
-class LocationException(message: String) : Exception(message)
+/**
+ * Error de geolocalización.
+ *
+ * Lleva el **motivo** y no una frase: el texto lo pone la interfaz, que es la
+ * única capa que puede alcanzar los recursos y por tanto traducirlo.
+ */
+class LocationException(val reason: ErrorReason) : Exception(reason.name)
 
 /**
  * Obtiene la posición del dispositivo.
@@ -51,21 +57,16 @@ class LocationService(private val context: Context) {
      */
     suspend fun getCurrentPosition(): Coordinates {
         if (!isLocationEnabled()) {
-            throw LocationException(
-                "El GPS está desactivado. Actívalo en los ajustes del dispositivo.",
-            )
+            throw LocationException(ErrorReason.LOCATION_DISABLED)
         }
         if (!hasPermission()) {
-            throw LocationException("Permiso de ubicación denegado.")
+            throw LocationException(ErrorReason.LOCATION_PERMISSION)
         }
 
         lastKnownFresh()?.let { return it }
 
         val fresh = withTimeoutOrNull(FRESH_TIMEOUT_MILLIS) { requestFreshLocation() }
-        return fresh ?: throw LocationException(
-            "No se pudo obtener la ubicación a tiempo. " +
-                "Asegúrate de estar al aire libre o con buena señal GPS.",
-        )
+        return fresh ?: throw LocationException(ErrorReason.LOCATION_TIMEOUT)
     }
 
     /** Última posición conocida, si no ha envejecido demasiado. */

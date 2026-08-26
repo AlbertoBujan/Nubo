@@ -13,7 +13,6 @@ data class HourlyForecast(
     val temperature: Int?,
     /** Código WMO, con sufijo 'n' si esa hora es nocturna. */
     val skyStateCode: String,
-    val skyDescription: String,
     val precipitationProbability: Int?,
     val humidity: Int?,
     val windSpeed: Int?,
@@ -30,19 +29,19 @@ data class HourlyForecast(
         /**
          * Horas que se conservan de la predicción.
          *
-         * Open-Meteo entrega siete días hora a hora, pero pasadas un par de
-         * jornadas el detalle horario ya no dice nada que no diga el resumen
-         * del día: la incertidumbre a esa distancia es mayor que la diferencia
-         * entre una hora y la siguiente. Recortar aquí es lo que evita además
-         * un carrusel de veinticinco pantallas.
+         * Open-Meteo entrega siete días hora a hora, pero pasado el día el
+         * detalle horario ya no dice nada que no diga el resumen diario: la
+         * incertidumbre a esa distancia es mayor que la diferencia entre una
+         * hora y la siguiente. Recortar aquí es lo que evita además un
+         * carrusel interminable.
          *
          * Los siete días siguen estando: "Próximos días" no sale de esta lista
          * sino del bloque `hourly` del JSON, que [DailyForecast] agrega por su
          * cuenta y entero.
          *
-         * Son ocho bloques justos de los que muestra el carrusel.
+         * Son cuatro bloques justos de los que muestra el carrusel.
          */
-        const val MAX_HOURS = 48
+        const val MAX_HOURS = 24
 
         /**
          * Parsea el bloque `hourly` de Open-Meteo, que viene en arrays
@@ -84,7 +83,6 @@ data class HourlyForecast(
                     dateTime = date,
                     temperature = temperature?.optDoubleOrNull(i)?.roundToInt(),
                     skyStateCode = code ?: "",
-                    skyDescription = WeatherCode.fromCode(code).description,
                     precipitationProbability = precipProb?.optDoubleOrNull(i)?.roundToInt(),
                     humidity = humidity?.optDoubleOrNull(i)?.roundToInt(),
                     windSpeed = windSpeed?.optDoubleOrNull(i)?.roundToInt(),

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Idiomas que la app declara.
+
+  Con esto Android ofrece Nubo en Ajustes > Idiomas de la aplicación, para
+  quien quiera la app en otro idioma que el del teléfono.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="es" />
+</locale-config>

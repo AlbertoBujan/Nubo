@@ -38,8 +38,12 @@ fun WeatherIcon.toImageVector(): ImageVector = when (this) {
     // trae ninguna, y la gota y el copo sueltos que se usaban antes no son el
     // estándar.
     WeatherIcon.CLOUD_DRIZZLE -> NuboWeatherIcons.CloudDrizzle
+    WeatherIcon.CLOUD_RAIN_LIGHT -> NuboWeatherIcons.CloudRainLight
     WeatherIcon.CLOUD_RAIN -> NuboWeatherIcons.CloudRain
+    WeatherIcon.CLOUD_RAIN_HEAVY -> NuboWeatherIcons.CloudRainHeavy
+    WeatherIcon.CLOUD_SNOW_LIGHT -> NuboWeatherIcons.CloudSnowLight
     WeatherIcon.CLOUD_SNOW -> NuboWeatherIcons.CloudSnow
+    WeatherIcon.CLOUD_SNOW_HEAVY -> NuboWeatherIcons.CloudSnowHeavy
     // Nube con rayo, más reconocible que el rayo suelto de `Bolt`.
     WeatherIcon.CLOUD_LIGHTNING -> Icons.Outlined.Thunderstorm
     WeatherIcon.CLOUD_FOG -> Icons.Outlined.CloudQueue
