@@ -76,6 +76,11 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.tanh
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.drawscope.clipRect
 
 /**
  * Horas que caben a la vez, y tamaño del bloque que avanza cada deslizamiento.
@@ -88,6 +93,12 @@ import kotlin.math.tanh
 private const val VISIBLE_HOURS = 6
 
 private val CHART_HEIGHT = 110.dp
+
+/** Lo que tarda la curva en trazarse de lado a lado. */
+private const val CHART_DRAW_MILLIS = 1100
+
+/** Lo que cada columna espera respecto a la anterior. */
+private const val COLUMN_STAGGER_MILLIS = 55
 
 private val DEW_COLOR = Color(0xFF80DEEA)
 
@@ -110,6 +121,14 @@ fun HourlyView(
     /** Hora local del sitio: las marcas de la predicción están en su huso. */
     nowThere: java.time.LocalDateTime,
     modifier: Modifier = Modifier,
+    /**
+     * Dato que se estrena, o nulo si no hay nada que estrenar.
+     *
+     * Cuando cambia, la gráfica se traza de izquierda a derecha en vez de
+     * aparecer hecha. Es el dato y no un sí/no porque al refrescar hay que
+     * poder distinguir una actualización de la siguiente.
+     */
+    animateFrom: Any? = null,
 ) {
     if (forecasts.isEmpty()) return
 
@@ -127,6 +146,15 @@ fun HourlyView(
         hours.any { (it.precipitationProbability ?: 0) > 0 }
     }
     val scrollState = rememberScrollState()
+
+    // De 0 a 1, lo que lleva trazado la curva. Sin nada que estrenar nace en 1
+    // y el dibujo es el de siempre, sin recorte ni fotograma de más.
+    val reveal = remember(animateFrom) { Animatable(if (animateFrom == null) 1f else 0f) }
+    LaunchedEffect(animateFrom) {
+        if (animateFrom != null) {
+            reveal.animateTo(1f, tween(CHART_DRAW_MILLIS, easing = LinearEasing))
+        }
+    }
 
     // Índice de la hora más cercana al momento actual. Se calcula una sola vez
     // aquí y no dentro de cada columna: comparando por separado, dos horas
@@ -205,6 +233,10 @@ fun HourlyView(
                                 hasAnyRain = hasAnyRain,
                                 isNow = index == nowIndex,
                                 today = nowThere.toLocalDate(),
+                                animateFrom = animateFrom,
+                                // Escalonado: la fila se enciende al ritmo al
+                                // que la curva de debajo la va alcanzando.
+                                animationDelay = index * COLUMN_STAGGER_MILLIS,
                                 modifier = Modifier.width(itemWidth),
                             )
                         }
@@ -217,6 +249,7 @@ fun HourlyView(
                         forecasts = hours,
                         itemWidth = itemWidth,
                         scroll = scrollState.value,
+                        reveal = reveal.value,
                         modifier = Modifier
                             .width(blockWidth)
                             .height(CHART_HEIGHT),
@@ -396,6 +429,10 @@ private fun HourColumn(
     hasAnyRain: Boolean,
     isNow: Boolean,
     today: LocalDate,
+    /** Dato que se estrena, o nulo; ver `countUpTo`. */
+    animateFrom: Any?,
+    /** Retardo de esta columna, para que la fila se anime de izquierda a derecha. */
+    animationDelay: Int,
     modifier: Modifier = Modifier,
 ) {
 
@@ -445,9 +482,13 @@ private fun HourColumn(
         // para que el carrusel no quede con un hueco vacío en días secos.
         if (hasAnyRain) {
             Spacer(Modifier.height(4.dp))
-            val probability = forecast.precipitationProbability ?: 0
+            // La casilla se ocupa según el dato **final**: si dependiese del
+            // que va contando, el texto aparecería a media animación en vez de
+            // contar desde cero.
+            val chance = forecast.precipitationProbability ?: 0
+            val counted = countUpTo(chance, animateFrom, animationDelay) ?: 0
             Text(
-                if (probability > 0) "$probability%" else "",
+                if (chance > 0) "$counted%" else "",
                 color = Color(0xFF64B5F6),
                 fontSize = 11.sp,
             )
@@ -458,14 +499,22 @@ private fun HourColumn(
         Row(verticalAlignment = Alignment.CenterVertically) {
             forecast.windDirectionDegrees?.let { degrees ->
                 WindArrow(
-                    degrees = degrees,
+                    // El dato dice de dónde viene el viento; la punta enseña
+                    // hacia dónde va, así que la media vuelta va aquí y lo que
+                    // se anima es ya el rumbo de la punta.
+                    tipDegrees = sweepTo(
+                        (degrees + 180).toFloat(),
+                        animateFrom,
+                        animationDelay,
+                    ),
                     color = windColor(forecast.windSpeed),
                     modifier = Modifier.size(12.dp),
                 )
                 Spacer(Modifier.width(3.dp))
             }
+            val wind = countUpTo(forecast.windSpeed, animateFrom, animationDelay)
             Text(
-                forecast.windSpeed?.let { "$it km/h" }.orEmpty(),
+                wind?.let { "$it km/h" }.orEmpty(),
                 color = windColor(forecast.windSpeed),
                 fontSize = 10.sp,
             )
@@ -509,6 +558,15 @@ private fun TemperatureChart(
     itemWidth: Dp,
     /** Desplazamiento del carrusel, en píxeles. */
     scroll: Int,
+    /**
+     * Cuánto se enseña, de 0 a 1, medido **en el ancho de la tarjeta**.
+     *
+     * No es un porcentaje del recorrido de la curva: la curva son 24 horas y
+     * solo seis están a la vista, así que trazarla por su longitud llenaría lo
+     * que se ve en el primer cuarto del tiempo y el resto pasaría fuera de la
+     * pantalla, sin que se viera nada.
+     */
+    reveal: Float,
     modifier: Modifier = Modifier,
 ) {
     val measurer = rememberTextMeasurer()
@@ -518,6 +576,11 @@ private fun TemperatureChart(
     Canvas(modifier.clipToBounds()) {
         val temps = forecasts.mapNotNull { it.temperature?.toFloat() }
         if (temps.isEmpty()) return@Canvas
+
+        // Hasta dónde ha llegado el trazo. Los puntos y las etiquetas se
+        // comparan contra esto para asomar cuando la línea los alcanza, en vez
+        // de quedar cortados por la mitad como los cortaría un recorte.
+        val revealX = if (reveal >= 1f) Float.MAX_VALUE else size.width * reveal
 
         val dewPoints = forecasts.map { it.dewPoint?.toFloat() }
         val hasDew = dewPoints.any { it != null }
@@ -573,11 +636,22 @@ private fun TemperatureChart(
         }
 
         if (hasDew) {
-            drawDewCurve(measurer, forecasts, dewPoints, points, ::yFor, minT)
+            drawDewCurve(measurer, forecasts, dewPoints, points, ::yFor, minT, revealX)
         }
 
-        drawTemperatureCurve(measurer, forecasts, points, paddingTop)
+        drawTemperatureCurve(measurer, forecasts, points, paddingTop, revealX)
     }
+}
+
+/**
+ * Dibuja [block] recortado a lo que la animación lleve trazado.
+ *
+ * Con el trazo terminado no se recorta nada: `clipRect` es una capa de más en
+ * cada fotograma del desplazamiento, que es cuando el gráfico se redibuja sin
+ * parar y no hay ninguna animación en curso.
+ */
+private fun DrawScope.revealed(revealX: Float, block: DrawScope.() -> Unit) {
+    if (revealX >= size.width) block() else clipRect(right = revealX) { block() }
 }
 
 /**
@@ -624,6 +698,7 @@ private fun DrawScope.drawDewCurve(
     tempPoints: List<Offset>,
     yFor: (Float) -> Float,
     minT: Float,
+    revealX: Float,
 ) {
     val dewPoints = dewValues.mapIndexed { i, value ->
         Offset(tempPoints[i].x, yFor(value ?: minT))
@@ -636,6 +711,7 @@ private fun DrawScope.drawDewCurve(
     val color = DEW_COLOR.copy(alpha = 0.7f)
 
     val stroked = extendToEdges(dewPoints)
+    fun strokeDashes() {
     for (i in 0 until stroked.size - 1) {
         val from = stroked[i]
         val to = stroked[i + 1]
@@ -662,14 +738,19 @@ private fun DrawScope.drawDewCurve(
             drawing = !drawing
         }
     }
+    }
+
+    revealed(revealX) { strokeDashes() }
 
     dewPoints.forEachIndexed { i, point ->
+        if (point.x > revealX) return@forEachIndexed
         if (dewValues[i] != null) drawCircle(DEW_COLOR, 1.5.dp.toPx(), point)
     }
 
     // Etiquetas en índices impares, intercaladas con las de temperatura.
     val style = TextStyle(color = DEW_COLOR, fontSize = 10.sp, fontWeight = FontWeight.W500)
     for (i in 1 until dewPoints.size step 2) {
+        if (dewPoints[i].x > revealX) continue
         if (!isLabelVisible(dewPoints[i].x)) continue
         val value = forecasts[i].dewPoint ?: continue
         val text = measurer.measure("$value°", style)
@@ -688,6 +769,7 @@ private fun DrawScope.drawTemperatureCurve(
     forecasts: List<HourlyForecast>,
     points: List<Offset>,
     paddingTop: Float,
+    revealX: Float,
 ) {
     // Curva suave: cada tramo es una cúbica con los tiradores en el punto medio,
     // que evita los picos angulosos de unir los puntos con rectas.
@@ -721,19 +803,22 @@ private fun DrawScope.drawTemperatureCurve(
         lineTo(stroked.first().x, size.height)
         close()
     }
-    drawPath(
-        fill,
-        Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.15f), Color.Transparent),
-            startY = paddingTop,
-            endY = size.height,
-        ),
-    )
+    revealed(revealX) {
+        drawPath(
+            fill,
+            Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = 0.15f), Color.Transparent),
+                startY = paddingTop,
+                endY = size.height,
+            ),
+        )
 
-    drawPath(path, brush, style = Stroke(width = 2.5.dp.toPx()))
+        drawPath(path, brush, style = Stroke(width = 2.5.dp.toPx()))
+    }
 
     val style = TextStyle(color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     points.forEachIndexed { i, point ->
+        if (point.x > revealX) return@forEachIndexed
         val temp = forecasts[i].temperature ?: return@forEachIndexed
         if (i % 2 == 0 && isLabelVisible(point.x)) {
             val text = measurer.measure("$temp°", style)
@@ -748,13 +833,14 @@ private fun DrawScope.drawTemperatureCurve(
 
 /** Flecha que apunta en la dirección desde la que sopla el viento. */
 @Composable
-fun WindArrow(degrees: Int, color: Color, modifier: Modifier = Modifier) {
+fun WindArrow(tipDegrees: Float, color: Color, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val radius = size.minDimension / 2
         val center = Offset(size.width / 2, size.height / 2)
-        // El dato meteorológico indica de dónde viene el viento, así que se
-        // suman 180° para que la punta muestre hacia dónde va.
-        val radians = Math.toRadians((degrees + 180).toDouble())
+        // Rumbo **de la punta**, no la dirección meteorológica: la media vuelta
+        // que las separa se aplica en quien llama, porque es lo que hay que
+        // animar cuando la flecha sale del norte.
+        val radians = Math.toRadians(tipDegrees.toDouble())
         val direction = Offset(
             kotlin.math.sin(radians).toFloat(),
             -kotlin.math.cos(radians).toFloat(),
@@ -798,6 +884,8 @@ fun TemperatureRangeBar(
     globalMax: Int,
     modifier: Modifier = Modifier,
     height: Dp = 6.dp,
+    /** Cuánto del tramo se ha llenado, de 0 a 1. */
+    reveal: Float = 1f,
 ) {
     val span = (globalMax - globalMin).coerceAtLeast(1).toFloat()
     val startFraction = ((min - globalMin) / span).coerceIn(0f, 1f)
@@ -810,7 +898,10 @@ fun TemperatureRangeBar(
             .background(Color.White.copy(alpha = 0.12f)),
     ) {
         val left = size.width * startFraction
-        val right = size.width * endFraction
+        // El tramo se llena desde su principio; el color no se estira con él,
+        // porque el degradado va de la mínima a la máxima del día y moverlo
+        // haría que la barra cambiase de color mientras crece.
+        val right = left + (size.width * endFraction - left) * reveal.coerceIn(0f, 1f)
         if (right <= left) return@Canvas
 
         drawRoundRect(
@@ -820,7 +911,7 @@ fun TemperatureRangeBar(
                     TemperatureColors.forTemperature(max.toFloat()),
                 ),
                 startX = left,
-                endX = right,
+                endX = size.width * endFraction,
             ),
             topLeft = Offset(left, 0f),
             size = androidx.compose.ui.geometry.Size(right - left, size.height),

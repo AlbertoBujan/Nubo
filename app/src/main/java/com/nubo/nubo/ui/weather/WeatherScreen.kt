@@ -80,6 +80,8 @@ import com.nubo.nubo.domain.weather.WeatherCode
 import com.nubo.nubo.ui.components.AlertBox
 import com.nubo.nubo.ui.components.DailyView
 import com.nubo.nubo.ui.components.HourlyView
+import com.nubo.nubo.ui.components.countUpTo
+import java.time.LocalDateTime
 import com.nubo.nubo.ui.components.SkyLayer
 import com.nubo.nubo.ui.components.SkyLayerOverlay
 import com.nubo.nubo.ui.components.SunMoonCard
@@ -215,12 +217,30 @@ fun WeatherScreen(
     // calculados: el de salida se mueve con el desplazamiento de la página y el
     // de llegada depende del ancho del menú, así que cualquier número escrito a
     // mano aquí quedaría desfasado al tocar cualquiera de los dos.
-    // Va con el id de la ciudad que lo midió: una página que está cargando o
-    // que falló no dibuja el nombre grande, así que no mide nada, y sin el id se
-    // seguiría usando el sitio que dejó la anterior — el nombre saldría dos
-    // veces, el de la capa de encima y el del propio aviso de "Cargando…".
-    var nameOrigin by remember { mutableStateOf<Pair<String, Rect>?>(null) }
+    // Dónde tiene su nombre **cada** ciudad, no solo la que se está viendo.
+    //
+    // Miden todas las páginas, incluidas las que asoman al deslizar, y por eso
+    // en el relevo de mitad del gesto la nueva ya tiene sitio conocido. Cuando
+    // solo medía la que se veía, la que entraba tardaba un fotograma en decir
+    // dónde estaba y en ese hueco no se dibujaba ningún nombre: eso es lo que
+    // se veía como que el nombre bailaba al cambiar de ciudad.
+    //
+    // La clave es el id porque una página que carga o que falló no dibuja el
+    // nombre grande y por tanto no mide: sin ella se usaría el sitio que dejó
+    // otra ciudad, y el nombre saldría dos veces —el de esta capa y el del
+    // propio aviso de "Cargando…".
+    val nameMetrics = remember { mutableStateMapOf<String, NameMetrics>() }
+
+    // Dónde y cuánto ocupa el pager: de aquí sale el ancho de página con el que
+    // se calcula por dónde va el nombre.
+    var pagerBounds by remember { mutableStateOf<Rect?>(null) }
     var nameTarget by remember { mutableStateOf<Rect?>(null) }
+
+    // Qué dato se animó ya en cada ciudad. Vive **fuera** del pager a
+    // propósito: dentro moriría con el `key` que reinicia la página al salir de
+    // ella, y volver a una ciudad ya cargada repetiría el recuento. Lo que la
+    // animación cuenta es que el dato acaba de llegar, no que se esté mirando.
+    val animatedStamps = remember { mutableStateMapOf<String, LocalDateTime>() }
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
 
     val effectAlpha by remember(state) {
@@ -303,7 +323,9 @@ fun WeatherScreen(
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefreshAll,
                     state = pullState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onGloballyPositioned { pagerBounds = it.unclippedBounds() },
                     indicator = {
                         PullToRefreshDefaults.Indicator(
                             modifier = Modifier.align(Alignment.TopCenter),
@@ -330,14 +352,37 @@ fun WeatherScreen(
                                 // Solo la página que se ve cede su nombre a la
                                 // capa de encima; las de al lado dibujan el
                                 // suyo, que es lo que se ve asomar al deslizar.
-                                onNameBounds = if (page == pagerState.currentPage) {
-                                    { nameOrigin = city.locationId to it }
-                                } else {
-                                    null
+                                animateFrom = animationTrigger(
+                                    city.lastUpdated,
+                                    animatedStamps[city.locationId],
+                                ),
+                                onAnimated = {
+                                    city.lastUpdated?.let {
+                                        animatedStamps[city.locationId] = it
+                                    }
                                 },
-                                // El nombre grande solo se desvanece en la
-                                // página que se ve; las de al lado conservan
-                                // el suyo entero mientras asoman al deslizar.
+                                // Solo se apunta con la página quieta arriba
+                                // del todo: es su sitio de reposo, y a partir
+                                // de él se calcula el resto sin volver a medir.
+                                onNameBounds = { rect ->
+                                    if (scrollOf(city.locationId).value == 0) {
+                                        nameMetrics[city.locationId] =
+                                            NameMetrics(rect.width, rect.height, rect.top)
+                                    }
+                                },
+                                // El nombre grande solo se calla en la página
+                                // que se ve, porque ahí lo dibuja la capa de
+                                // encima; las de al lado conservan el suyo,
+                                // que es lo que se ve asomar al deslizar.
+                                // Hasta que la ciudad se ha medido una vez, la
+                                // capa de encima no sabe dónde ponerla y el
+                                // nombre lo pinta la página: es el primer
+                                // fotograma tras arrancar, y sin esto no habría
+                                // ningún nombre en pantalla. Cuando el relevo
+                                // ocurre los dos están en el mismo sitio, así
+                                // que no se nota.
+                                hideName = page == pagerState.currentPage &&
+                                    nameMetrics.containsKey(city.locationId),
                                 collapse = if (page == pagerState.currentPage) collapse else 0f,
                                 onRetry = { onRetry(city.locationId) },
                             )
@@ -358,11 +403,21 @@ fun WeatherScreen(
         //
         // Los dos extremos del viaje se **miden**: el de salida se desplaza con
         // la página y el de llegada depende de lo que ocupe el menú.
-        val current = state.currentLocation
+        // El nombre sale del **pager**, no de `state.currentLocation`.
+        //
+        // Son dos relojes distintos: el pager cambia de página a mitad del
+        // gesto y el estado no se entera hasta que se asienta. Con el nombre
+        // colgando del segundo, entre un momento y otro no había ninguno que
+        // dibujar —el de la página nueva ya se había apagado por ser la que se
+        // ve, y esta capa seguía preguntando por la anterior—, y esa espera se
+        // veía como que el nombre tardaba en aparecer al cambiar de ciudad.
+        val current = state.locations.getOrNull(pagerState.currentPage)
         val travellingName = current?.nombre.orEmpty()
-        val origin = nameOrigin?.takeIf { it.first == current?.locationId }?.second
+        val metrics = current?.locationId?.let { nameMetrics[it] }
+        val pager = pagerBounds
         val target = nameTarget
-        if (travellingName.isNotEmpty() && origin != null && target != null) {
+        if (travellingName.isNotEmpty() && metrics != null && pager != null && target != null) {
+            val scroll = current?.locationId?.let { pageScrolls[it] }
             Box(
                 Modifier
                     .fillMaxSize()
@@ -381,11 +436,26 @@ fun WeatherScreen(
                         // se ve mejor que agrandar un texto medido en pequeño.
                         .wrapContentSize(Alignment.TopStart, unbounded = true)
                         .graphicsLayer {
+                            // De dónde sale el nombre. **No se mide aquí**: se
+                            // calcula del desplazamiento del pager y del scroll
+                            // de la página, que se leen en este mismo fotograma.
+                            // Medirlo llegaba siempre un fotograma tarde, y a la
+                            // velocidad de un deslizamiento rápido eso son 25 px
+                            // de vaivén respecto a la página: el nombre bailaba.
+                            //
+                            // El nombre va centrado en su página, así que basta
+                            // el ancho de una y lo que ocupa el texto.
+                            val originLeft = pager.left +
+                                (pager.width - metrics.width) / 2f -
+                                pagerState.currentPageOffsetFraction * pager.width
+                            val originTop = metrics.restTop - (scroll?.value ?: 0)
+                            val originMiddle = originTop + metrics.height / 2f
+
                             val travel = nameTravel(collapse)
-                            val middle = lerp(origin.center.y, target.center.y, travel)
+                            val middle = lerp(originMiddle, target.center.y, travel)
                             translationX =
-                                lerp(origin.left, target.left, travel) - overlayOrigin.x
-                            translationY = middle - origin.height / 2f - overlayOrigin.y
+                                lerp(originLeft, target.left, travel) - overlayOrigin.x
+                            translationY = middle - metrics.height / 2f - overlayOrigin.y
                             val shrink = nameScale(collapse)
                             scaleX = shrink
                             scaleY = shrink
@@ -398,6 +468,18 @@ fun WeatherScreen(
         }
     }
 }
+
+/**
+ * Lo que hace falta saber del nombre de una ciudad para dibujarlo desde fuera
+ * de su página: cuánto ocupa y a qué altura está cuando la página está arriba
+ * del todo. Lo demás —dónde cae ahora mismo— se calcula.
+ */
+private data class NameMetrics(
+    val width: Float,
+    val height: Float,
+    /** Su borde superior con la página arriba del todo. */
+    val restTop: Float,
+)
 
 /**
  * Rectángulo que ocupa algo en la ventana, **sin recortar** por sus padres.
@@ -623,14 +705,17 @@ private fun CityPage(
     city: CityWeather,
     scrollState: ScrollState,
     collapse: Float,
-    onNameBounds: ((Rect) -> Unit)?,
+    animateFrom: LocalDateTime?,
+    onAnimated: () -> Unit,
+    onNameBounds: (Rect) -> Unit,
+    hideName: Boolean,
     onRetry: () -> Unit,
 ) {
     when {
         city.isLoading && !city.hasData -> LoadingState(city.name)
         city.error != null && !city.hasData -> ErrorState(city.error, onRetry)
         !city.hasData -> NoDataState(city.name, onRetry)
-        else -> CityContent(city, scrollState, onNameBounds)
+        else -> CityContent(city, scrollState, animateFrom, onAnimated, onNameBounds, hideName)
     }
 }
 
@@ -682,6 +767,20 @@ private const val TRAVEL_SCALE = 0.6f
  */
 internal fun nameTravel(collapse: Float): Float = collapse.coerceIn(0f, 1f)
 
+/**
+ * El dato que hay que estrenar con una animación, o nulo si no hay ninguno.
+ *
+ * Lo que se anima es que **el dato es nuevo**, no que se esté mirando la
+ * ciudad: la primera carga y cada refresco traen una hora de actualización
+ * distinta, y volver a una ciudad ya cargada trae la misma. Por eso el registro
+ * de lo ya animado vive fuera del pager, donde no lo barre el reinicio de la
+ * página al salir de ella.
+ */
+internal fun animationTrigger(
+    stamp: LocalDateTime?,
+    alreadyAnimated: LocalDateTime?,
+): LocalDateTime? = stamp?.takeIf { it != alreadyAnimated }
+
 /** Tramo final del viaje en el que asoma la chincheta. */
 private const val PIN_APPEARS = 0.75f
 
@@ -703,9 +802,24 @@ internal fun nameScale(collapse: Float): Float =
 private fun CityContent(
     city: CityWeather,
     scrollState: ScrollState,
-    onNameBounds: ((Rect) -> Unit)?,
+    animateFrom: LocalDateTime?,
+    onAnimated: () -> Unit,
+    onNameBounds: (Rect) -> Unit,
+    hideName: Boolean,
 ) {
     val (max, min) = city.todayRange
+
+    // El disparo de las animaciones es **el dato**, no un sí/no: en cuanto
+    // empieza se da por gastado y `animate` pasa a falso, pero al refrescar
+    // llega una hora de actualización nueva y todo lo que cuelga de ella vuelve
+    // a arrancar. Con un booleano, la segunda vez ya valía `true` y no cambiaba
+    // nada, así que refrescar no animaba nada.
+    val trigger = remember(city.lastUpdated) { animateFrom }
+    LaunchedEffect(trigger) { if (trigger != null) onAnimated() }
+
+    val degrees = countUpTo(city.currentTemperature, trigger)
+    val high = countUpTo(max, trigger)
+    val low = countUpTo(min, trigger)
 
     Column(
         Modifier
@@ -725,14 +839,12 @@ private fun CityContent(
             fontWeight = FontWeight.W500,
             maxLines = 1,
             modifier = Modifier
-                .graphicsLayer { alpha = if (onNameBounds != null) 0f else 1f }
-                .onGloballyPositioned { coordinates ->
-                    onNameBounds?.invoke(coordinates.unclippedBounds())
-                },
+                .graphicsLayer { alpha = if (hideName) 0f else 1f }
+                .onGloballyPositioned { onNameBounds(it.unclippedBounds()) },
         )
 
         Text(
-            city.currentTemperature?.let { "$it°" } ?: "--",
+            degrees?.let { "$it°" } ?: "--",
             color = Color.White,
             fontSize = 92.sp,
             fontWeight = FontWeight.Thin,
@@ -748,8 +860,8 @@ private fun CityContent(
             Text(
                 stringResource(
                     R.string.high_low,
-                    max?.let { "$it°" } ?: stringResource(R.string.no_value),
-                    min?.let { "$it°" } ?: stringResource(R.string.no_value),
+                    high?.let { "$it°" } ?: stringResource(R.string.no_value),
+                    low?.let { "$it°" } ?: stringResource(R.string.no_value),
                 ),
                 color = Color.White.copy(alpha = 0.6f),
                 fontSize = 15.sp,
@@ -767,6 +879,7 @@ private fun CityContent(
             forecasts = city.hourly,
             alerts = city.alerts,
             nowThere = city.nowThere,
+            animateFrom = trigger,
             modifier = Modifier.padding(horizontal = CARD_MARGIN),
         )
 
@@ -777,6 +890,7 @@ private fun CityContent(
             alerts = city.alerts,
             today = city.nowThere.toLocalDate(),
             airQualityByDay = city.airQualityByDay,
+            animateFrom = trigger,
             modifier = Modifier.padding(horizontal = CARD_MARGIN),
         )
 

@@ -57,6 +57,8 @@ fun DailyView(
     today: LocalDate,
     /** Peor índice de calidad del aire de cada día; falta donde el modelo no llega. */
     airQualityByDay: Map<LocalDate, Int> = emptyMap(),
+    /** Dato que se estrena, o nulo si no hay nada que estrenar. */
+    animateFrom: Any? = null,
     modifier: Modifier = Modifier,
 ) {
     if (forecasts.isEmpty()) return
@@ -77,9 +79,13 @@ fun DailyView(
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )
 
-        forecasts.forEach { forecast ->
+        forecasts.forEachIndexed { index, forecast ->
             DailyRow(
                 forecast = forecast,
+                animateFrom = animateFrom,
+                // Escalonadas como las horas: la lista se llena de arriba
+                // abajo en vez de encenderse entera de golpe.
+                animationDelay = index * ROW_STAGGER_MILLIS,
                 alerts = alerts,
                 globalMin = globalMin,
                 globalMax = globalMax,
@@ -96,6 +102,8 @@ fun DailyView(
 @Composable
 private fun DailyRow(
     forecast: DailyForecast,
+    animateFrom: Any?,
+    animationDelay: Int,
     alerts: List<WeatherAlert>,
     globalMin: Int,
     globalMax: Int,
@@ -161,10 +169,11 @@ private fun DailyRow(
                 Spacer(Modifier.width(10.dp))
 
                 Box(Modifier.width(44.dp)) {
-                    val probability = forecast.precipitationProbability ?: 0
-                    if (probability > 0) {
+                    val chance = forecast.precipitationProbability ?: 0
+                    val counted = countUpTo(chance, animateFrom, animationDelay) ?: 0
+                    if (chance > 0) {
                         Text(
-                            "$probability%",
+                            "$counted%",
                             color = Color(0xFF64B5F6),
                             fontSize = 13.sp,
                         )
@@ -173,8 +182,9 @@ private fun DailyRow(
 
                 // Pegada a la barra por la derecha, como la maxima lo esta por la
                 // izquierda: las dos son los extremos del rango que dibuja la barra.
+                val low = countUpTo(forecast.tempMin, animateFrom, animationDelay)
                 Text(
-                    forecast.tempMin?.let { "$it°" } ?: "--",
+                    low?.let { "$it°" } ?: "--",
                     color = Color.White.copy(alpha = 0.7f),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.W600,
@@ -187,13 +197,15 @@ private fun DailyRow(
                     max = forecast.tempMax ?: globalMax,
                     globalMin = globalMin,
                     globalMax = globalMax,
+                    reveal = fillProgress(animateFrom, animationDelay),
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 6.dp),
                 )
 
+                val high = countUpTo(forecast.tempMax, animateFrom, animationDelay)
                 Text(
-                    forecast.tempMax?.let { "$it°" } ?: "--",
+                    high?.let { "$it°" } ?: "--",
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.W600,
@@ -243,6 +255,12 @@ private fun DailyRow(
  */
 @Composable
 private fun DayConditions(forecast: DailyForecast, airQuality: Int?) {
+    // Aquí el dato que se estrena es el propio despliegue: estas cifras no
+    // estaban en pantalla hasta que se ha tocado la fila, así que cuentan cada
+    // vez que se abre. La fecha sirve de disparo porque la casilla nace y muere
+    // con ella.
+    val trigger = forecast.date
+
     Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
         HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
         Spacer(Modifier.height(14.dp))
@@ -251,14 +269,14 @@ private fun DayConditions(forecast: DailyForecast, airQuality: Int?) {
             val band = airQuality?.let { AirQualityBand.forAqi(it) }
             DayTile(
                 label = stringResource(R.string.air_quality),
-                value = airQuality?.toString(),
+                value = countUpTo(airQuality, trigger)?.toString(),
                 caption = band?.let { stringResource(it.labelRes) },
                 captionColor = band?.toColor(),
             )
             val uv = forecast.uvIndexMax
             DayTile(
                 label = stringResource(R.string.uv_max),
-                value = uv?.roundToInt()?.toString(),
+                value = countUpTo(uv?.roundToInt(), trigger)?.toString(),
                 caption = uv?.let { stringResource(UvBand.forIndex(it).labelRes) },
                 captionColor = uv?.let { UvBand.forIndex(it).toColor() },
             )
@@ -269,12 +287,16 @@ private fun DayConditions(forecast: DailyForecast, airQuality: Int?) {
         Row {
             DayTile(
                 label = stringResource(R.string.humidity_mean),
-                value = forecast.humidityMean?.let { stringResource(R.string.percent, it) },
+                value = countUpTo(forecast.humidityMean, trigger)
+                    ?.let { stringResource(R.string.percent, it) },
                 caption = null,
             )
             DayTile(
                 label = stringResource(R.string.apparent),
-                value = apparentRange(forecast),
+                value = apparentRange(
+                    countUpTo(forecast.apparentMin, trigger),
+                    countUpTo(forecast.apparentMax, trigger),
+                ),
                 caption = null,
             )
         }
@@ -292,9 +314,10 @@ internal fun toggledExpansion(current: LocalDate?, tapped: LocalDate): LocalDate
     if (current == tapped) null else tapped
 
 /** "14° a 20°", o solo el valor que haya, o nada. */
-internal fun apparentRange(forecast: DailyForecast): String? {
-    val min = forecast.apparentMin
-    val max = forecast.apparentMax
+internal fun apparentRange(forecast: DailyForecast): String? =
+    apparentRange(forecast.apparentMin, forecast.apparentMax)
+
+internal fun apparentRange(min: Int?, max: Int?): String? {
     return when {
         min != null && max != null -> "$min° a $max°"
         max != null -> "$max°"
@@ -359,6 +382,9 @@ private fun RowScope.DayTile(
 }
 
 /** Diámetro del punto de aviso de la fila diaria. */
+/** Lo que cada fila espera respecto a la de encima. */
+private const val ROW_STAGGER_MILLIS = 45
+
 private val ALERT_DOT_SIZE = 9.dp
 
 @Composable
