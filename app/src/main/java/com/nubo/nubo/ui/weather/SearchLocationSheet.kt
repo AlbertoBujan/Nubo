@@ -46,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import com.nubo.nubo.domain.geo.formatDistance
+import com.nubo.nubo.ui.components.LocalUnits
 import com.nubo.nubo.domain.model.SavedLocation
 
 /** Hoja inferior para buscar y añadir municipios. */
@@ -216,7 +217,9 @@ fun SearchLocationSheet(
                                     // que se vea de dónde sale el orden.
                                     val subtitle = listOfNotNull(
                                         location.region,
-                                        result.distanceKm?.let { formatDistance(it) },
+                                        result.distanceKm?.let {
+                                            formatDistance(it, LocalUnits.current.distance)
+                                        },
                                     ).joinToString(" · ")
 
                                     if (subtitle.isNotBlank()) {

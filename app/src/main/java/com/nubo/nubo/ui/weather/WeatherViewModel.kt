@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
+import com.nubo.nubo.domain.model.Units
 
 /**
  * Estado de la pantalla del tiempo.
@@ -105,6 +106,7 @@ class WeatherViewModel(
                     storage.loadBackgroundIntervalIndex(),
                 ) { BackgroundInterval.OFF },
                 alertNotifications = storage.loadAlertNotifications(),
+                units = storage.loadUnits(),
                 isInitialized = true,
             )
         }
@@ -588,6 +590,13 @@ class WeatherViewModel(
         viewModelScope.launch {
             storage.saveBackgroundIntervalIndex(interval.ordinal)
             _uiState.update { it.copy(backgroundInterval = interval) }
+        }
+    }
+
+    fun setUnits(units: Units) {
+        viewModelScope.launch {
+            storage.saveUnits(units)
+            _uiState.update { it.copy(units = units) }
         }
     }
 

@@ -81,6 +81,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.drawscope.clipRect
+import com.nubo.nubo.domain.model.Units
 
 /**
  * Horas que caben a la vez, y tamaño del bloque que avanza cada deslizamiento.
@@ -247,6 +248,7 @@ fun HourlyView(
                     // arrastra consigo el trabajo de medir todas las columnas.
                     TemperatureChart(
                         forecasts = hours,
+                        units = LocalUnits.current,
                         itemWidth = itemWidth,
                         scroll = scrollState.value,
                         reveal = reveal.value,
@@ -512,9 +514,14 @@ private fun HourColumn(
                 )
                 Spacer(Modifier.width(3.dp))
             }
-            val wind = countUpTo(forecast.windSpeed, animateFrom, animationDelay)
+            val units = LocalUnits.current
+            val wind = countUpTo(
+                forecast.windSpeed?.let(units::speed),
+                animateFrom,
+                animationDelay,
+            )
             Text(
-                wind?.let { "$it km/h" }.orEmpty(),
+                wind?.let { stringResource(units.speed.labelRes, it) }.orEmpty(),
                 color = windColor(forecast.windSpeed),
                 fontSize = 10.sp,
             )
@@ -555,6 +562,13 @@ private fun windColor(speed: Int?): Color = when {
 @Composable
 private fun TemperatureChart(
     forecasts: List<HourlyForecast>,
+    /**
+     * Solo afecta a los **rótulos**. La curva, su escala y sus colores se
+     * calculan en grados Celsius: la forma de la curva es la misma en cualquier
+     * escala, y los colores están calibrados a temperaturas reales, no a
+     * números.
+     */
+    units: Units,
     itemWidth: Dp,
     /** Desplazamiento del carrusel, en píxeles. */
     scroll: Int,
@@ -636,10 +650,10 @@ private fun TemperatureChart(
         }
 
         if (hasDew) {
-            drawDewCurve(measurer, forecasts, dewPoints, points, ::yFor, minT, revealX)
+            drawDewCurve(measurer, forecasts, dewPoints, points, ::yFor, minT, revealX, units)
         }
 
-        drawTemperatureCurve(measurer, forecasts, points, paddingTop, revealX)
+        drawTemperatureCurve(measurer, forecasts, points, paddingTop, revealX, units)
     }
 }
 
@@ -699,6 +713,7 @@ private fun DrawScope.drawDewCurve(
     yFor: (Float) -> Float,
     minT: Float,
     revealX: Float,
+    units: Units,
 ) {
     val dewPoints = dewValues.mapIndexed { i, value ->
         Offset(tempPoints[i].x, yFor(value ?: minT))
@@ -753,7 +768,7 @@ private fun DrawScope.drawDewCurve(
         if (dewPoints[i].x > revealX) continue
         if (!isLabelVisible(dewPoints[i].x)) continue
         val value = forecasts[i].dewPoint ?: continue
-        val text = measurer.measure("$value°", style)
+        val text = measurer.measure("${units.temperature(value)}°", style)
         drawText(
             text,
             topLeft = Offset(
@@ -770,6 +785,7 @@ private fun DrawScope.drawTemperatureCurve(
     points: List<Offset>,
     paddingTop: Float,
     revealX: Float,
+    units: Units,
 ) {
     // Curva suave: cada tramo es una cúbica con los tiradores en el punto medio,
     // que evita los picos angulosos de unir los puntos con rectas.
@@ -821,7 +837,7 @@ private fun DrawScope.drawTemperatureCurve(
         if (point.x > revealX) return@forEachIndexed
         val temp = forecasts[i].temperature ?: return@forEachIndexed
         if (i % 2 == 0 && isLabelVisible(point.x)) {
-            val text = measurer.measure("$temp°", style)
+            val text = measurer.measure("${units.temperature(temp)}°", style)
             drawText(
                 text,
                 topLeft = Offset(point.x - text.size.width / 2, point.y + 8.dp.toPx()),
@@ -841,24 +857,31 @@ fun WindArrow(tipDegrees: Float, color: Color, modifier: Modifier = Modifier) {
         // que las separa se aplica en quien llama, porque es lo que hay que
         // animar cuando la flecha sale del norte.
         val radians = Math.toRadians(tipDegrees.toDouble())
-        val direction = Offset(
+        val forward = Offset(
             kotlin.math.sin(radians).toFloat(),
             -kotlin.math.cos(radians).toFloat(),
         )
-        val tip = center + direction * radius
-        val tail = center - direction * radius
+        // Perpendicular, para separar las alas del eje.
+        val side = Offset(-forward.y, forward.x)
 
-        drawLine(color, tail, tip, 1.5f, cap = StrokeCap.Round)
-
-        // Punta de flecha: dos trazos cortos girados respecto a la dirección.
-        listOf(140.0, -140.0).forEach { angle ->
-            val a = Math.toRadians(angle)
-            val rotated = Offset(
-                (direction.x * kotlin.math.cos(a) - direction.y * kotlin.math.sin(a)).toFloat(),
-                (direction.x * kotlin.math.sin(a) + direction.y * kotlin.math.cos(a)).toFloat(),
-            )
-            drawLine(color, tip, tip + rotated * (radius * 0.7f), 1.5f, cap = StrokeCap.Round)
+        // Aguja maciza con la base ahuecada, como la de una brújula: a 12 dp
+        // los tres trazos de antes se leían como una mancha, y el hueco de la
+        // cola es lo que dice hacia dónde apunta sin necesidad de resolver la
+        // punta. Al ser un relleno y no tres líneas, el giro no la emborrona.
+        val tip = center + forward * radius
+        val wing = radius * 0.62f
+        val notch = center - forward * (radius * 0.35f)
+        val path = Path().apply {
+            moveTo(tip.x, tip.y)
+            val left = center - forward * radius + side * wing
+            val right = center - forward * radius - side * wing
+            lineTo(left.x, left.y)
+            lineTo(notch.x, notch.y)
+            lineTo(right.x, right.y)
+            close()
         }
+
+        drawPath(path, color)
     }
 }
 

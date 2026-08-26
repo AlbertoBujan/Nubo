@@ -14,6 +14,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +31,7 @@ import com.nubo.nubo.ui.weather.AppDrawer
 import com.nubo.nubo.ui.weather.SearchLocationSheet
 import com.nubo.nubo.ui.weather.UpdateDialog
 import com.nubo.nubo.data.remote.UpdateService
+import com.nubo.nubo.ui.components.LocalUnits
 import com.nubo.nubo.ui.weather.AboutDialog
 import com.nubo.nubo.ui.weather.CheckingUpdatesDialog
 import com.nubo.nubo.ui.weather.NotificationsBlockedDialog
@@ -155,11 +157,14 @@ private fun NuboApp(
         }
     }
 
+    CompositionLocalProvider(LocalUnits provides state.units) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             AppDrawer(
                 state = state,
+                units = state.units,
+                onUnitsChange = viewModel::setUnits,
                 interval = state.backgroundInterval,
                 showSettings = drawerSettings,
                 onToggleSettings = { drawerSettings = it },
@@ -275,5 +280,6 @@ private fun NuboApp(
 
     if (showAbout) {
         AboutDialog(onDismiss = { showAbout = false })
+    }
     }
 }

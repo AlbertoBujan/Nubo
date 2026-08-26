@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nubo.nubo.BuildConfig
+import com.nubo.nubo.domain.model.Units
 import kotlinx.coroutines.launch
 
 /**
@@ -64,6 +65,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun AppDrawer(
     state: WeatherUiState,
+    units: Units,
+    onUnitsChange: (Units) -> Unit,
     interval: BackgroundInterval,
     showSettings: Boolean,
     onToggleSettings: (Boolean) -> Unit,
@@ -164,6 +167,8 @@ fun AppDrawer(
                 ) { settings ->
                     if (settings) {
                         SettingsPanel(
+                            units = units,
+                            onUnitsChange = onUnitsChange,
                             interval = interval,
                             onIntervalChange = onIntervalChange,
                             alertNotifications = alertNotifications,

@@ -80,6 +80,7 @@ import com.nubo.nubo.domain.weather.WeatherCode
 import com.nubo.nubo.ui.components.AlertBox
 import com.nubo.nubo.ui.components.DailyView
 import com.nubo.nubo.ui.components.HourlyView
+import com.nubo.nubo.ui.components.LocalUnits
 import com.nubo.nubo.ui.components.countUpTo
 import java.time.LocalDateTime
 import com.nubo.nubo.ui.components.SkyLayer
@@ -817,9 +818,12 @@ private fun CityContent(
     val trigger = remember(city.lastUpdated) { animateFrom }
     LaunchedEffect(trigger) { if (trigger != null) onAnimated() }
 
-    val degrees = countUpTo(city.currentTemperature, trigger)
-    val high = countUpTo(max, trigger)
-    val low = countUpTo(min, trigger)
+    // Se convierte **antes** de contar: si no, el recuento subiría hasta el
+    // valor en grados Celsius y saltaría al de la otra escala al terminar.
+    val units = LocalUnits.current
+    val degrees = countUpTo(city.currentTemperature?.let(units::temperature), trigger)
+    val high = countUpTo(max?.let(units::temperature), trigger)
+    val low = countUpTo(min?.let(units::temperature), trigger)
 
     Column(
         Modifier

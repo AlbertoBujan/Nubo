@@ -1,5 +1,6 @@
 package com.nubo.nubo.domain.geo
 
+import com.nubo.nubo.domain.model.DistanceUnit
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.min
@@ -36,13 +37,30 @@ fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
 /**
  * Distancia en el formato en el que se muestra junto a cada resultado.
  *
- * Por debajo de 10 km se da un decimal, porque entre dos pueblos vecinos "8 km"
- * y "8,4 km" es la diferencia entre ordenarlos y no.
+ * Por debajo de diez unidades se da un decimal, porque entre dos pueblos
+ * vecinos "8 km" y "8,4 km" es la diferencia entre ordenarlos y no. Y por
+ * debajo de una, se baja a la unidad pequeña de cada sistema —metros o pies—
+ * en vez de enseñar "0,6 km", que se lee peor.
  */
-fun formatDistance(km: Double): String = when {
-    km < 1 -> "${(km * 1000).toInt()} m"
+fun formatDistance(km: Double, unit: DistanceUnit = DistanceUnit.KILOMETRES): String {
+    val value = unit.fromKm(km)
     // El separador decimal sale del idioma del teléfono: "8,4 km" en español
     // y "8.4 km" en inglés.
-    km < 10 -> "%.1f km".format(java.util.Locale.getDefault(), km)
-    else -> "${km.toInt()} km"
+    val locale = java.util.Locale.getDefault()
+    return when (unit) {
+        DistanceUnit.KILOMETRES -> when {
+            value < 1 -> "${(value * 1000).toInt()} m"
+            value < 10 -> "%.1f km".format(locale, value)
+            else -> "${value.toInt()} km"
+        }
+
+        DistanceUnit.MILES -> when {
+            value < 0.1 -> "${(value * FEET_PER_MILE).toInt()} ft"
+            value < 10 -> "%.1f mi".format(locale, value)
+            else -> "${value.toInt()} mi"
+        }
+    }
 }
+
+/** Pies que tiene una milla. */
+private const val FEET_PER_MILE = 5280

@@ -13,7 +13,11 @@ import com.nubo.nubo.domain.astro.SunTimes
 import com.nubo.nubo.domain.model.AirQualityForecast
 import com.nubo.nubo.domain.model.DailyForecast
 import com.nubo.nubo.domain.model.HourlyForecast
+import com.nubo.nubo.domain.model.DistanceUnit
 import com.nubo.nubo.domain.model.SavedLocation
+import com.nubo.nubo.domain.model.SpeedUnit
+import com.nubo.nubo.domain.model.TemperatureUnit
+import com.nubo.nubo.domain.model.Units
 import com.nubo.nubo.domain.model.WeatherAlert
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
@@ -151,6 +155,28 @@ class WeatherStorage(private val context: Context) {
         store.edit { prefs -> prefs[BACKGROUND_INTERVAL_KEY] = index }
     }
 
+    // ── Unidades ────────────────────────────────────────────────────────────
+
+    suspend fun loadUnits(): Units = store.data.first().let { prefs ->
+        Units(
+            temperature = TemperatureUnit.entries.getOrElse(prefs[TEMPERATURE_UNIT_KEY] ?: 0) {
+                TemperatureUnit.CELSIUS
+            },
+            speed = SpeedUnit.entries.getOrElse(prefs[SPEED_UNIT_KEY] ?: 0) { SpeedUnit.KMH },
+            distance = DistanceUnit.entries.getOrElse(prefs[DISTANCE_UNIT_KEY] ?: 0) {
+                DistanceUnit.KILOMETRES
+            },
+        )
+    }
+
+    suspend fun saveUnits(units: Units) {
+        store.edit { prefs ->
+            prefs[TEMPERATURE_UNIT_KEY] = units.temperature.ordinal
+            prefs[SPEED_UNIT_KEY] = units.speed.ordinal
+            prefs[DISTANCE_UNIT_KEY] = units.distance.ordinal
+        }
+    }
+
     // ── Notificaciones de avisos ────────────────────────────────────────────
 
     suspend fun loadAlertNotifications(): Boolean =
@@ -169,6 +195,9 @@ class WeatherStorage(private val context: Context) {
     }
 
     private companion object {
+        val TEMPERATURE_UNIT_KEY = intPreferencesKey("temperature_unit")
+        val SPEED_UNIT_KEY = intPreferencesKey("speed_unit")
+        val DISTANCE_UNIT_KEY = intPreferencesKey("distance_unit")
         val ALERT_NOTIFICATIONS_KEY = booleanPreferencesKey("alert_notifications")
         val NOTIFIED_ALERTS_KEY = stringSetPreferencesKey("notified_alerts")
         val LOCATIONS_KEY = stringSetPreferencesKey("saved_locations")

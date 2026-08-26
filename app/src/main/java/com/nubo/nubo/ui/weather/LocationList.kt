@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.nubo.nubo.domain.weather.WeatherCode
+import com.nubo.nubo.ui.components.LocalUnits
 import com.nubo.nubo.ui.components.toImageVector
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -315,7 +316,8 @@ private fun LocationCard(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                city?.currentTemperature?.let { "$it°" } ?: "--",
+                city?.currentTemperature
+                    ?.let { "${LocalUnits.current.temperature(it)}°" } ?: "--",
                 color = Color.White.copy(alpha = if (selected) 0.95f else 0.7f),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Light,

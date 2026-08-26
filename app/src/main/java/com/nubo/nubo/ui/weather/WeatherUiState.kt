@@ -18,6 +18,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import com.nubo.nubo.domain.model.Units
 
 /** Estado de una ciudad concreta. */
 data class CityWeather(
@@ -199,6 +200,8 @@ data class WeatherUiState(
     val backgroundInterval: BackgroundInterval = BackgroundInterval.OFF,
     /** Avisar por notificación de los avisos nuevos. Solo España. */
     val alertNotifications: Boolean = false,
+    /** Unidades con las que se pintan temperaturas y viento. */
+    val units: Units = Units(),
     val isInitialized: Boolean = false,
 ) {
     val currentLocation: SavedLocation? get() = locations.getOrNull(currentIndex)

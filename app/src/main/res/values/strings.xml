@@ -15,7 +15,7 @@
     <string name="now">Now</string>
     <string name="today">Today</string>
     <string name="tomorrow">Tomorrow</string>
-    <string name="high_low">High: %1$s   Low: %2$s</string>
+    <string name="high_low">High: %1$s · Low: %2$s</string>
     <string name="no_value" translatable="false">--</string>
     <string name="loading_city">Loading %1$s…</string>
     <string name="no_data_for">No data for %1$s</string>
@@ -193,4 +193,22 @@
     <string name="notifications_blocked">Notifications are blocked</string>
     <string name="notifications_blocked_body">Android is blocking Nubo\'s notifications, so warnings cannot be delivered. You can allow them in the system settings.</string>
     <string name="open_settings">Open settings</string>
+    <string name="units">Units</string>
+    <string name="temperature">Temperature</string>
+    <string name="wind_speed">Wind speed</string>
+    <string name="unit_celsius">Celsius (°C)</string>
+    <string name="unit_fahrenheit">Fahrenheit (°F)</string>
+    <string name="unit_kmh">Kilometres per hour</string>
+    <string name="unit_mph">Miles per hour</string>
+    <string name="unit_celsius_short" translatable="false">°C</string>
+    <string name="unit_fahrenheit_short" translatable="false">°F</string>
+    <string name="unit_kmh_short" translatable="false">km/h</string>
+    <string name="unit_mph_short" translatable="false">mph</string>
+    <string name="speed_kmh">%1$d km/h</string>
+    <string name="speed_mph">%1$d mph</string>
+    <string name="distance">Distance</string>
+    <string name="unit_kilometres">Kilometres</string>
+    <string name="unit_miles">Miles</string>
+    <string name="unit_km_short" translatable="false">km</string>
+    <string name="unit_miles_short" translatable="false">mi</string>
 </resources>

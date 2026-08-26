@@ -7,7 +7,7 @@
     <string name="now">Ahora</string>
     <string name="today">Hoy</string>
     <string name="tomorrow">Mañana</string>
-    <string name="high_low">Máx: %1$s   Mín: %2$s</string>
+    <string name="high_low">Máx: %1$s · Mín: %2$s</string>
     <string name="loading_city">Cargando %1$s…</string>
     <string name="no_data_for">Sin datos para %1$s</string>
     <string name="retry">Reintentar</string>
@@ -182,4 +182,16 @@
     <string name="notifications_blocked">Las notificaciones están bloqueadas</string>
     <string name="notifications_blocked_body">Android está bloqueando las notificaciones de Nubo, así que los avisos no pueden llegar. Puedes permitirlas en los ajustes del sistema.</string>
     <string name="open_settings">Abrir ajustes</string>
+    <string name="units">Unidades</string>
+    <string name="temperature">Temperatura</string>
+    <string name="wind_speed">Velocidad del viento</string>
+    <string name="unit_celsius">Celsius (°C)</string>
+    <string name="unit_fahrenheit">Fahrenheit (°F)</string>
+    <string name="unit_kmh">Kilómetros por hora</string>
+    <string name="unit_mph">Millas por hora</string>
+    <string name="speed_kmh">%1$d km/h</string>
+    <string name="speed_mph">%1$d mph</string>
+    <string name="distance">Distancia</string>
+    <string name="unit_kilometres">Kilómetros</string>
+    <string name="unit_miles">Millas</string>
 </resources>

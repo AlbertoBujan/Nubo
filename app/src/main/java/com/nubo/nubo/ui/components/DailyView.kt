@@ -25,7 +25,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +70,12 @@ fun DailyView(
     // demás a mano, y bastaría olvidarse de uno para tener dos desplegados.
     var expandedDate by remember { mutableStateOf<LocalDate?>(null) }
 
+    // Qué días han estrenado ya sus casillas. Abrir, cerrar y volver a abrir la
+    // misma tarjeta no vuelve a contar: la animación cuenta que esas cifras se
+    // ven por primera vez, y a la tercera vez ya solo estorba. Se olvida con
+    // cada dato nuevo, que es cuando vuelve a haber algo que estrenar.
+    val animatedDays = remember(animateFrom) { mutableStateMapOf<LocalDate, Boolean>() }
+
     // Rango global para que la barra de cada día sea comparable con las demás.
     val globalMin = remember(forecasts) { forecasts.mapNotNull { it.tempMin }.minOrNull() ?: 0 }
     val globalMax = remember(forecasts) { forecasts.mapNotNull { it.tempMax }.maxOrNull() ?: 1 }
@@ -92,6 +100,8 @@ fun DailyView(
                 today = today,
                 airQuality = airQualityByDay[forecast.date],
                 expanded = expandedDate == forecast.date,
+                tilesAnimateFrom = forecast.date.takeIf { animatedDays[it] != true },
+                onTilesAnimated = { animatedDays[forecast.date] = true },
                 onToggle = { expandedDate = toggledExpansion(expandedDate, forecast.date) },
             )
             Spacer(Modifier.height(6.dp))
@@ -110,6 +120,9 @@ private fun DailyRow(
     today: LocalDate,
     airQuality: Int?,
     expanded: Boolean,
+    /** Fecha si sus casillas aún no se han estrenado, o nulo si ya lo hicieron. */
+    tilesAnimateFrom: LocalDate?,
+    onTilesAnimated: () -> Unit,
     onToggle: () -> Unit,
 ) {
     val isToday = forecast.date == today
@@ -182,7 +195,12 @@ private fun DailyRow(
 
                 // Pegada a la barra por la derecha, como la maxima lo esta por la
                 // izquierda: las dos son los extremos del rango que dibuja la barra.
-                val low = countUpTo(forecast.tempMin, animateFrom, animationDelay)
+                val units = LocalUnits.current
+                val low = countUpTo(
+                    forecast.tempMin?.let(units::temperature),
+                    animateFrom,
+                    animationDelay,
+                )
                 Text(
                     low?.let { "$it°" } ?: "--",
                     color = Color.White.copy(alpha = 0.7f),
@@ -203,7 +221,11 @@ private fun DailyRow(
                         .padding(horizontal = 6.dp),
                 )
 
-                val high = countUpTo(forecast.tempMax, animateFrom, animationDelay)
+                val high = countUpTo(
+                    forecast.tempMax?.let(units::temperature),
+                    animateFrom,
+                    animationDelay,
+                )
                 Text(
                     high?.let { "$it°" } ?: "--",
                     color = Color.White,
@@ -226,7 +248,12 @@ private fun DailyRow(
             }
 
             AnimatedVisibility(expanded) {
-                DayConditions(forecast = forecast, airQuality = airQuality)
+                DayConditions(
+                    forecast = forecast,
+                    airQuality = airQuality,
+                    animateFrom = tilesAnimateFrom,
+                    onAnimated = onTilesAnimated,
+                )
             }
             }
         }
@@ -254,12 +281,19 @@ private fun DailyRow(
  * tarjetas idénticas habría que explicar cuál es cuál.
  */
 @Composable
-private fun DayConditions(forecast: DailyForecast, airQuality: Int?) {
-    // Aquí el dato que se estrena es el propio despliegue: estas cifras no
-    // estaban en pantalla hasta que se ha tocado la fila, así que cuentan cada
-    // vez que se abre. La fecha sirve de disparo porque la casilla nace y muere
-    // con ella.
-    val trigger = forecast.date
+private fun DayConditions(
+    forecast: DailyForecast,
+    airQuality: Int?,
+    animateFrom: LocalDate?,
+    onAnimated: () -> Unit,
+) {
+    // Aquí lo que se estrena es el propio despliegue: estas cifras no estaban
+    // en pantalla hasta que se ha tocado la fila. Se captura al abrirse y se da
+    // por gastado en el acto, así que la segunda vez que se abre este mismo día
+    // ya llega nulo y los números salen puestos.
+    val trigger = remember(forecast.date) { animateFrom }
+    val units = LocalUnits.current
+    LaunchedEffect(trigger) { if (trigger != null) onAnimated() }
 
     Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
         HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
@@ -294,8 +328,8 @@ private fun DayConditions(forecast: DailyForecast, airQuality: Int?) {
             DayTile(
                 label = stringResource(R.string.apparent),
                 value = apparentRange(
-                    countUpTo(forecast.apparentMin, trigger),
-                    countUpTo(forecast.apparentMax, trigger),
+                    countUpTo(forecast.apparentMin?.let(units::temperature), trigger),
+                    countUpTo(forecast.apparentMax?.let(units::temperature), trigger),
                 ),
                 caption = null,
             )

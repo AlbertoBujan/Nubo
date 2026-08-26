@@ -15,6 +15,9 @@ import com.nubo.nubo.domain.weather.WeatherDescription
 import com.nubo.nubo.ui.weather.AgeUnit
 import com.nubo.nubo.ui.weather.BackgroundInterval
 import com.nubo.nubo.ui.weather.DataAge
+import com.nubo.nubo.domain.model.DistanceUnit
+import com.nubo.nubo.domain.model.SpeedUnit
+import com.nubo.nubo.domain.model.TemperatureUnit
 
 /**
  * Texto de cada valor del dominio.
@@ -153,3 +156,50 @@ fun DataAge.describe(): String = when (unit) {
     AgeUnit.HOURS -> stringResource(R.string.updated_hours_ago, amount.toInt())
     AgeUnit.DAYS -> stringResource(R.string.updated_days_ago, amount.toInt())
 }
+
+/** Cómo se escribe una velocidad en la unidad elegida: "20 km/h", "12 mph". */
+val SpeedUnit.labelRes: Int
+    @StringRes get() = when (this) {
+        SpeedUnit.KMH -> R.string.speed_kmh
+        SpeedUnit.MPH -> R.string.speed_mph
+    }
+
+/** Nombre de la unidad de velocidad, para elegirla en los ajustes. */
+val SpeedUnit.nameRes: Int
+    @StringRes get() = when (this) {
+        SpeedUnit.KMH -> R.string.unit_kmh
+        SpeedUnit.MPH -> R.string.unit_mph
+    }
+
+/** Nombre de la escala de temperatura, para elegirla en los ajustes. */
+val TemperatureUnit.nameRes: Int
+    @StringRes get() = when (this) {
+        TemperatureUnit.CELSIUS -> R.string.unit_celsius
+        TemperatureUnit.FAHRENHEIT -> R.string.unit_fahrenheit
+    }
+
+/** Abreviatura con la que se enseña cuál está elegida. */
+val TemperatureUnit.shortRes: Int
+    @StringRes get() = when (this) {
+        TemperatureUnit.CELSIUS -> R.string.unit_celsius_short
+        TemperatureUnit.FAHRENHEIT -> R.string.unit_fahrenheit_short
+    }
+
+val SpeedUnit.shortRes: Int
+    @StringRes get() = when (this) {
+        SpeedUnit.KMH -> R.string.unit_kmh_short
+        SpeedUnit.MPH -> R.string.unit_mph_short
+    }
+
+/** Nombre de la unidad de distancia, para elegirla en los ajustes. */
+val DistanceUnit.nameRes: Int
+    @StringRes get() = when (this) {
+        DistanceUnit.KILOMETRES -> R.string.unit_kilometres
+        DistanceUnit.MILES -> R.string.unit_miles
+    }
+
+val DistanceUnit.shortRes: Int
+    @StringRes get() = when (this) {
+        DistanceUnit.KILOMETRES -> R.string.unit_km_short
+        DistanceUnit.MILES -> R.string.unit_miles_short
+    }

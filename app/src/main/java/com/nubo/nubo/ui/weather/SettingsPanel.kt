@@ -16,9 +16,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,6 +36,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nubo.nubo.BuildConfig
+import com.nubo.nubo.domain.model.DistanceUnit
+import com.nubo.nubo.domain.model.SpeedUnit
+import com.nubo.nubo.domain.model.TemperatureUnit
+import com.nubo.nubo.domain.model.Units
+import com.nubo.nubo.ui.components.nameRes
+import com.nubo.nubo.ui.components.shortRes
 import com.nubo.nubo.work.BackgroundUpdateWorker
 
 /**
@@ -47,6 +56,8 @@ import com.nubo.nubo.work.BackgroundUpdateWorker
  */
 @Composable
 fun SettingsPanel(
+    units: Units,
+    onUnitsChange: (Units) -> Unit,
     interval: BackgroundInterval,
     onIntervalChange: (BackgroundInterval) -> Unit,
     alertNotifications: Boolean,
@@ -60,6 +71,39 @@ fun SettingsPanel(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 32.dp),
     ) {
+        SectionLabel(stringResource(R.string.units))
+
+        // Cada magnitud tiene dos opciones y nada más, así que la fila enseña
+        // cuál está puesta y tocarla cambia a la otra: dos filas de radio por
+        // magnitud dirían lo mismo ocupando el doble.
+        SettingsRow(
+            icon = Icons.Outlined.Thermostat,
+            label = stringResource(R.string.temperature),
+            onClick = {
+                onUnitsChange(units.copy(temperature = units.temperature.next()))
+            },
+            subtitle = stringResource(units.temperature.nameRes),
+            trailing = { UnitTag(stringResource(units.temperature.shortRes)) },
+        )
+        SettingsRow(
+            icon = Icons.Outlined.Air,
+            label = stringResource(R.string.wind_speed),
+            onClick = { onUnitsChange(units.copy(speed = units.speed.next())) },
+            subtitle = stringResource(units.speed.nameRes),
+            trailing = { UnitTag(stringResource(units.speed.shortRes)) },
+        )
+        SettingsRow(
+            icon = Icons.Outlined.Straighten,
+            label = stringResource(R.string.distance),
+            onClick = { onUnitsChange(units.copy(distance = units.distance.next())) },
+            subtitle = stringResource(units.distance.nameRes),
+            trailing = { UnitTag(stringResource(units.distance.shortRes)) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+        Spacer(Modifier.height(12.dp))
+
         SectionLabel(stringResource(R.string.background_updates))
         Text(
             stringResource(R.string.background_updates_hint),
@@ -136,6 +180,27 @@ fun SettingsPanel(
             subtitle = stringResource(R.string.version_label, BuildConfig.VERSION_NAME),
         )
     }
+}
+
+/** La otra opción; con dos, "la siguiente" y "la otra" son lo mismo. */
+private fun TemperatureUnit.next(): TemperatureUnit =
+    if (this == TemperatureUnit.CELSIUS) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS
+
+private fun SpeedUnit.next(): SpeedUnit =
+    if (this == SpeedUnit.KMH) SpeedUnit.MPH else SpeedUnit.KMH
+
+private fun DistanceUnit.next(): DistanceUnit =
+    if (this == DistanceUnit.KILOMETRES) DistanceUnit.MILES else DistanceUnit.KILOMETRES
+
+/** La unidad puesta, a la derecha de su fila. */
+@Composable
+private fun UnitTag(text: String) {
+    Text(
+        text,
+        color = Color(0xFF64B5F6),
+        fontSize = 15.sp,
+        fontWeight = FontWeight.W600,
+    )
 }
 
 @Composable

@@ -3,6 +3,7 @@ package com.nubo.nubo.domain.geo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.nubo.nubo.domain.model.DistanceUnit
 import java.util.Locale
 
 /**
@@ -64,6 +65,30 @@ class DistanceTest {
             assertEquals("8,4 km", formatDistance(8.42))
             assertEquals("34 km", formatDistance(34.2))
             assertEquals("640 m", formatDistance(0.64))
+        }
+    }
+
+    @Test
+    fun `en millas se cambia de unidad, no solo de nombre`() {
+        withLocale(Locale.forLanguageTag("en-US")) {
+            // 8,42 km son 5,2 millas; 34,2 km son 21 millas.
+            assertEquals("5.2 mi", formatDistance(8.42, DistanceUnit.MILES))
+            assertEquals("21 mi", formatDistance(34.2, DistanceUnit.MILES))
+        }
+    }
+
+    @Test
+    fun `por debajo de una milla se baja a pies`() {
+        withLocale(Locale.forLanguageTag("en-US")) {
+            // 0,1 km son unos 328 pies.
+            assertEquals("328 ft", formatDistance(0.1, DistanceUnit.MILES))
+        }
+    }
+
+    @Test
+    fun `sin decir nada se mide en kilometros`() {
+        withLocale(Locale.forLanguageTag("es-ES")) {
+            assertEquals("8,4 km", formatDistance(8.42))
         }
     }
 
