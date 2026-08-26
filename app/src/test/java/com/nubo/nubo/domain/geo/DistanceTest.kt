@@ -3,6 +3,7 @@ package com.nubo.nubo.domain.geo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 /**
  * Se valida contra distancias reales conocidas, no contra valores copiados de
@@ -59,8 +60,36 @@ class DistanceTest {
     fun `el formato da un decimal en distancias cortas`() {
         // Entre dos pueblos vecinos, "8 km" y "8,4 km" es la diferencia entre
         // poder ordenarlos y no.
-        assertEquals("8,4 km", formatDistance(8.42))
-        assertEquals("34 km", formatDistance(34.2))
-        assertEquals("640 m", formatDistance(0.64))
+        withLocale(Locale.forLanguageTag("es-ES")) {
+            assertEquals("8,4 km", formatDistance(8.42))
+            assertEquals("34 km", formatDistance(34.2))
+            assertEquals("640 m", formatDistance(0.64))
+        }
+    }
+
+    @Test
+    fun `el separador decimal es el del idioma, no el del que compila`() {
+        // El separador sale de `Locale.getDefault()` desde que la app se
+        // traduce, así que el test **tiene que fijar el idioma**: dejándolo al
+        // de la máquina pasaba aquí y fallaba en el runner de CI, que está en
+        // inglés. Y es justo lo que hay que comprobar, porque una coma metida a
+        // mano se leería mal en media app.
+        withLocale(Locale.forLanguageTag("en-US")) {
+            assertEquals("8.4 km", formatDistance(8.42))
+        }
+        withLocale(Locale.forLanguageTag("es-ES")) {
+            assertEquals("8,4 km", formatDistance(8.42))
+        }
+    }
+
+    /** Ejecuta [block] con un idioma fijo y devuelve el que hubiera. */
+    private fun withLocale(locale: Locale, block: () -> Unit) {
+        val previous = Locale.getDefault()
+        Locale.setDefault(locale)
+        try {
+            block()
+        } finally {
+            Locale.setDefault(previous)
+        }
     }
 }
