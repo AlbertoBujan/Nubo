@@ -21,8 +21,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # v5 y no v6, que es la mayor actual: la v6 saca el cacheado a un
+      # componente propietario bajo los Terms of Use de Gradle, y usarla
+      # implica aceptarlos. La v5 solo trae el salto a Node 24 —lo que hacía
+      # falta— y sigue siendo MIT.
       - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       # La firma se hace dentro de Gradle, no con una acción externa: el
       # build.gradle.kts lee estas credenciales y produce un APK ya firmado.
