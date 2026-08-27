@@ -159,7 +159,11 @@ private fun DailyRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
+                    // Los márgenes de esta fila están apretados a conciencia:
+                    // todo lo que se recorta aquí se lo lleva la barra, que es
+                    // lo único que crece con el dato y lo único que se compara
+                    // de un día a otro.
+                    .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -167,7 +171,11 @@ private fun DailyRow(
                     color = if (isToday) Color.White else Color.White.copy(alpha = 0.75f),
                     fontSize = 15.sp,
                     fontWeight = if (isToday) FontWeight.W600 else FontWeight.Normal,
-                    modifier = Modifier.width(92.dp),
+                    maxLines = 1,
+                    // Da para el día más largo —"Wednesday", "Miércoles"— con
+                    // un dedo de aire. Es fijo para que los iconos de todas las
+                    // filas queden en la misma columna.
+                    modifier = Modifier.width(88.dp),
                 )
 
                 Icon(
@@ -179,9 +187,9 @@ private fun DailyRow(
                     modifier = Modifier.size(24.dp),
                 )
 
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
 
-                Box(Modifier.width(44.dp)) {
+                Box(Modifier.width(38.dp)) {
                     val chance = forecast.precipitationProbability ?: 0
                     val counted = countUpTo(chance, animateFrom, animationDelay) ?: 0
                     if (chance > 0) {
@@ -207,7 +215,7 @@ private fun DailyRow(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.W600,
                     textAlign = TextAlign.End,
-                    modifier = Modifier.width(40.dp),
+                    modifier = Modifier.width(38.dp),
                 )
 
                 TemperatureRangeBar(
@@ -216,9 +224,10 @@ private fun DailyRow(
                     globalMin = globalMin,
                     globalMax = globalMax,
                     reveal = fillProgress(animateFrom, animationDelay),
+                    height = 8.dp,
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 6.dp),
+                        .padding(horizontal = 5.dp),
                 )
 
                 val high = countUpTo(
@@ -231,7 +240,7 @@ private fun DailyRow(
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.W600,
-                    modifier = Modifier.width(40.dp),
+                    modifier = Modifier.width(38.dp),
                 )
 
                 // Sin flecha, nadie descubre que la fila se abre.

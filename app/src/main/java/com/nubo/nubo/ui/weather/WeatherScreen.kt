@@ -424,13 +424,8 @@ fun WeatherScreen(
                     .fillMaxSize()
                     .onGloballyPositioned { overlayOrigin = it.unclippedBounds().topLeft },
             ) {
-                Text(
-                    travellingName,
-                    color = Color.White,
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.W500,
-                    maxLines = 1,
-                    softWrap = false,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         // Sin acotar al ancho del padre: el nombre se dibuja
                         // siempre a tamaño grande y encoge con la escala, que
@@ -452,19 +447,55 @@ fun WeatherScreen(
                             val originTop = metrics.restTop - (scroll?.value ?: 0)
                             val originMiddle = originTop + metrics.height / 2f
 
+                            // A dónde va: centrado en la barra, chincheta
+                            // incluida. El centro horizontal es el de la página
+                            // —el de la barra sería el del hueco que deja el
+                            // menú, que está desplazado a la derecha— y la
+                            // altura sí sale de la barra.
+                            val leading = (PIN_SIZE + PIN_GAP).toPx()
+                            val landed = metrics.width * TRAVEL_SCALE
+                            val targetLeft = pager.left + pager.width / 2f -
+                                (leading + landed) / 2f + leading
+
                             val travel = nameTravel(collapse)
-                            val middle = lerp(originMiddle, target.center.y, travel)
-                            translationX =
-                                lerp(originLeft, target.left, travel) - overlayOrigin.x
-                            translationY = middle - metrics.height / 2f - overlayOrigin.y
                             val shrink = nameScale(collapse)
+                            val middle = lerp(originMiddle, target.center.y, travel)
+                            // La fila empieza en la chincheta, así que hay que
+                            // retroceder lo que ocupa para que quien caiga en el
+                            // sitio calculado sea el nombre. Encoge con la fila,
+                            // de ahí el factor.
+                            translationX = lerp(originLeft, targetLeft, travel) -
+                                leading / TRAVEL_SCALE * shrink - overlayOrigin.x
+                            translationY = middle - metrics.height / 2f - overlayOrigin.y
                             scaleX = shrink
                             scaleY = shrink
                             // Encoge hacia su izquierda y sin subir ni bajar:
                             // el punto que se interpola es ese, no el centro.
                             transformOrigin = TransformOrigin(0f, 0.5f)
                         },
-                )
+                ) {
+                    // Se dibuja a tamaño dividido por la escala final para que
+                    // al aterrizar mida exactamente PIN_SIZE: viaja dentro de
+                    // la misma capa que el nombre, así que encoge con él.
+                    Icon(
+                        Icons.Outlined.LocationOn,
+                        null,
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(PIN_SIZE / TRAVEL_SCALE)
+                            .graphicsLayer { alpha = pinAlpha(collapse) },
+                    )
+                    Spacer(Modifier.width(PIN_GAP / TRAVEL_SCALE))
+
+                    Text(
+                        travellingName,
+                        color = Color.White,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.W500,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
             }
         }
     }
@@ -609,24 +640,10 @@ private fun TopBar(
                     )
                 }
 
-                Spacer(Modifier.width(12.dp))
-
-                // La chincheta ocupa su sitio desde el principio aunque no se
-                // vea: si apareciera creando hueco, empujaría al nombre justo
-                // cuando acaba de posarse y el viaje terminaría con un salto.
-                Icon(
-                    Icons.Outlined.LocationOn,
-                    null,
-                    tint = Color.White,
-                    modifier = Modifier
-                        .size(16.dp)
-                        .graphicsLayer { alpha = pinAlpha(collapse) },
-                )
-
-                Spacer(Modifier.width(5.dp))
-
-                // Hueco vacío: aquí no se dibuja nada, solo se mide dónde tiene
-                // que terminar el nombre que viaja desde la página.
+                // Hueco vacío: aquí no se dibuja nada. De él sale **la altura**
+                // a la que aterriza el nombre; el centro horizontal no puede
+                // salir de aquí, porque este hueco empieza donde acaba el menú
+                // y su centro no es el de la pantalla.
                 Box(
                     Modifier
                         .weight(1f)
@@ -782,6 +799,10 @@ internal fun animationTrigger(
     alreadyAnimated: LocalDateTime?,
 ): LocalDateTime? = stamp?.takeIf { it != alreadyAnimated }
 
+/** Lo que mide la chincheta ya posada, y lo que la separa del nombre. */
+private val PIN_SIZE = 16.dp
+private val PIN_GAP = 5.dp
+
 /** Tramo final del viaje en el que asoma la chincheta. */
 private const val PIN_APPEARS = 0.75f
 
@@ -902,9 +923,13 @@ private fun CityContent(
 
         SunMoonCard(
             sunTimes = city.sunTimes,
+            dayLength = city.dayLength,
             moonData = city.moonData,
             sunPath = city.sunPath,
             moonPath = city.moonPath,
+            nextFullMoon = city.nextFullMoon,
+            nextNewMoon = city.nextNewMoon,
+            southernSky = city.southernSky,
             nowThere = city.nowThere,
             modifier = Modifier.padding(horizontal = CARD_MARGIN),
         )

@@ -211,4 +211,18 @@
     <string name="unit_miles">Miles</string>
     <string name="unit_km_short" translatable="false">km</string>
     <string name="unit_miles_short" translatable="false">mi</string>
+    <string name="next_full_moon">Next full moon</string>
+    <string name="next_new_moon">Next new moon</string>
+    <string name="day_length">Day length</string>
+    <string name="versus_yesterday">Versus yesterday</string>
+    <string name="duration_hours_minutes">%1$d h %2$d min</string>
+    <plurals name="minutes_less">
+        <item quantity="one">%1$d minute less</item>
+        <item quantity="other">%1$d minutes less</item>
+    </plurals>
+    <plurals name="minutes_more">
+        <item quantity="one">%1$d minute more</item>
+        <item quantity="other">%1$d minutes more</item>
+    </plurals>
+    <string name="same_as_yesterday">Same as yesterday</string>
 </resources>

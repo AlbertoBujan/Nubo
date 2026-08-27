@@ -194,4 +194,18 @@
     <string name="distance">Distancia</string>
     <string name="unit_kilometres">Kilómetros</string>
     <string name="unit_miles">Millas</string>
+    <string name="next_full_moon">Próxima luna llena</string>
+    <string name="next_new_moon">Próxima luna nueva</string>
+    <string name="day_length">Duración del día</string>
+    <string name="versus_yesterday">Respecto a ayer</string>
+    <string name="duration_hours_minutes">%1$d h %2$d min</string>
+    <plurals name="minutes_less">
+        <item quantity="one">%1$d minuto menos</item>
+        <item quantity="other">%1$d minutos menos</item>
+    </plurals>
+    <plurals name="minutes_more">
+        <item quantity="one">%1$d minuto más</item>
+        <item quantity="other">%1$d minutos más</item>
+    </plurals>
+    <string name="same_as_yesterday">Igual que ayer</string>
 </resources>

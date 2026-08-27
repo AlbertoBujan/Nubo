@@ -86,16 +86,39 @@ class MoonCalculatorTest {
         assertTrue("moonset nulo", moon.moonset != null)
     }
 
+
     @Test
-    fun `los nombres de fase cubren el ciclo`() {
-        assertEquals(MoonPhase.NEW, MoonCalculator.phaseOf(0.0))
-        assertEquals(MoonPhase.NEW, MoonCalculator.phaseOf(0.99))
-        assertEquals(MoonPhase.WAXING_CRESCENT, MoonCalculator.phaseOf(0.10))
-        assertEquals(MoonPhase.FIRST_QUARTER, MoonCalculator.phaseOf(0.25))
-        assertEquals(MoonPhase.WAXING_GIBBOUS, MoonCalculator.phaseOf(0.35))
-        assertEquals(MoonPhase.FULL, MoonCalculator.phaseOf(0.50))
-        assertEquals(MoonPhase.WANING_GIBBOUS, MoonCalculator.phaseOf(0.60))
-        assertEquals(MoonPhase.LAST_QUARTER, MoonCalculator.phaseOf(0.75))
-        assertEquals(MoonPhase.WANING_CRESCENT, MoonCalculator.phaseOf(0.85))
+    fun `de madrugada se dibuja el trayecto que ya esta en curso`() {
+        // Tokio, Dakota del Norte, a las 03:11: la luna lleva arriba desde la
+        // tarde anterior y el orto de hoy es a las 20:04. El arco tiene que ser
+        // el paso en curso, o la tarjeta enseña un trayecto que no ha empezado
+        // y se queda sin punto con la luna en el cielo.
+        val zone = ZoneId.of("America/Chicago")
+        val lat = 47.92472
+        val lon = -98.81622
+        val now = LocalDateTime.of(2026, 8, 27, 3, 11)
+
+        val data = MoonCalculator.calculate(now, lat, lon, zone)
+
+        assertTrue(
+            "orto ${data.moonrise} debería ser anterior a ahora",
+            data.moonrise!!.isBefore(now),
+        )
+        assertTrue(
+            "ocaso ${data.moonset} debería ser posterior a ahora",
+            data.moonset!!.isAfter(now),
+        )
+    }
+
+    @Test
+    fun `con la luna bajo el horizonte se dibuja el trayecto de hoy`() {
+        // A Coruña a media mañana: la luna se puso a las 08:06 y todavía no ha
+        // vuelto a salir, así que lo que toca enseñar es el paso de esta noche.
+        val zone = ZoneId.of("Europe/Madrid")
+        val now = LocalDateTime.of(2026, 8, 27, 10, 0)
+
+        val data = MoonCalculator.calculate(now, 43.3713, -8.396, zone)
+
+        assertTrue("orto ${data.moonrise}", data.moonrise!!.isAfter(now))
     }
 }

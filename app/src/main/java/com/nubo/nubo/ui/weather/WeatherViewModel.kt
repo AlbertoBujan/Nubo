@@ -11,7 +11,9 @@ import com.nubo.nubo.data.repository.WeatherRepository
 import com.nubo.nubo.data.repository.WeatherRepositoryException
 import com.nubo.nubo.domain.model.CityError
 import com.nubo.nubo.domain.model.ErrorReason
+import com.nubo.nubo.domain.astro.dayLengthOf
 import com.nubo.nubo.domain.astro.MoonCalculator
+import com.nubo.nubo.domain.astro.MoonPhases
 import com.nubo.nubo.domain.astro.SkyPath
 import com.nubo.nubo.domain.astro.SunCalculator
 import com.nubo.nubo.domain.astro.SunTimes
@@ -294,6 +296,17 @@ class WeatherViewModel(
         val sunTimes = SunCalculator.calculateTimes(now, lat, lon, zone)
         val moonData = MoonCalculator.calculate(now, lat, lon, zone)
 
+        // El día de ayer sale de la misma función con otra fecha: no cuesta una
+        // petición, y es la única cifra de la tarjeta del sol que cuenta algo
+        // que el arco no enseña.
+        val dayLength = sunTimes?.let {
+            dayLengthOf(
+                today = it,
+                yesterday = SunCalculator.calculateTimes(now.minusDays(1), lat, lon, zone),
+                zone = zone,
+            )
+        }
+
         // La forma del arco depende de la latitud y del día, así que se
         // muestrea aquí y no en el Canvas, que se redibuja constantemente.
         val sunPath = sunTimes?.let {
@@ -306,13 +319,23 @@ class WeatherViewModel(
             emptyList()
         }
 
+        // Las dos fases siguientes se resuelven aquí, con el resto de lo
+        // astronómico: son una búsqueda de unas cien evaluaciones y no tienen
+        // por qué repetirse en cada recomposición de la tarjeta.
+        val nextFull = MoonPhases.nextFullMoon(now, zone)
+        val nextNew = MoonPhases.nextNewMoon(now, zone)
+
         astroDay[locationId] = today
         updateCity(locationId) {
             it.copy(
                 sunTimes = sunTimes,
+                dayLength = dayLength,
                 moonData = moonData,
                 sunPath = sunPath,
                 moonPath = moonPath,
+                nextFullMoon = nextFull,
+                nextNewMoon = nextNew,
+                southernSky = lat < 0,
             )
         }
     }

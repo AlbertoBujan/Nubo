@@ -1,5 +1,6 @@
 package com.nubo.nubo.ui.weather
 
+import com.nubo.nubo.domain.astro.DayLength
 import com.nubo.nubo.domain.astro.MoonData
 import com.nubo.nubo.domain.astro.SunTimes
 import com.nubo.nubo.domain.model.AirQualityForecast
@@ -46,6 +47,20 @@ data class CityWeather(
     val airQuality: List<AirQualityForecast> = emptyList(),
     val sunTimes: SunTimes? = null,
     val moonData: MoonData? = null,
+    /** Cuánto dura el día de hoy y cuánto ha cambiado desde ayer. */
+    val dayLength: DayLength? = null,
+    /** Próxima luna llena en la zona de la ciudad, o nulo si no se ha calculado. */
+    val nextFullMoon: LocalDateTime? = null,
+    /** Próxima luna nueva, igual. */
+    val nextNewMoon: LocalDateTime? = null,
+    /**
+     * Si la ciudad está al sur del ecuador.
+     *
+     * Desde allí la luna se ve del revés, y el icono de la fase se dibuja
+     * espejado. Es un dato del sitio, no del tiempo, pero viaja con lo lunar
+     * porque es lo único que lo usa.
+     */
+    val southernSky: Boolean = false,
     /**
      * Trayectorias del sol y de la luna, normalizadas. Ver `SkyPath`.
      *

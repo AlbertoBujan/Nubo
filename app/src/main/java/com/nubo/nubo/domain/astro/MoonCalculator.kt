@@ -46,10 +46,28 @@ object MoonCalculator {
         val illumination = SunCalc.moonIllumination(dateTime.atZone(zone).toInstant())
         val date = dateTime.toLocalDate()
 
-        // Si la luna salió antes de medianoche no hay cruce ascendente hoy, así
-        // que se mira el día anterior.
-        val moonrise = findMoonEvent(date.atStartOfDay(), DAY_HOURS, lat, lng, true, zone)
-            ?: findMoonEvent(date.minusDays(1).atStartOfDay(), DAY_HOURS, lat, lng, true, zone)
+        val todayRise = findMoonEvent(date.atStartOfDay(), DAY_HOURS, lat, lng, true, zone)
+        val yesterdayRise =
+            findMoonEvent(date.minusDays(1).atStartOfDay(), DAY_HOURS, lat, lng, true, zone)
+
+        // La luna está ahora mismo por encima del horizonte.
+        val aloft = SunCalc.moonAltitude(dateTime.atZone(zone).toInstant(), lat, lng) > HORIZON
+
+        val moonrise = when {
+            // El trayecto que se dibuja es **el que está en curso**, y a
+            // primera hora ese empezó ayer: la luna sale cada día unos
+            // cincuenta minutos más tarde, así que de madrugada suele estar
+            // arriba desde la víspera mientras el orto de hoy aún no ha
+            // llegado. Cogiendo el de hoy, el arco describía un paso que no
+            // había empezado y la tarjeta se quedaba sin punto de posición
+            // teniendo la luna en el cielo.
+            todayRise != null && dateTime < todayRise && aloft ->
+                yesterdayRise ?: todayRise
+
+            // Si la luna salió antes de medianoche no hay cruce ascendente hoy,
+            // así que se mira el día anterior.
+            else -> todayRise ?: yesterdayRise
+        }
 
         // El ocaso se busca **a partir del orto**, no dentro del día natural.
         // Buscándolo desde medianoche se cogía el de la madrugada, que es el
@@ -65,7 +83,7 @@ object MoonCalculator {
             moonset = moonset,
             cycle = illumination.phase,
             illumination = illumination.fraction,
-            phase = phaseOf(illumination.phase),
+            phase = MoonPhases.phaseOn(date, zone, illumination.phase),
         )
     }
 
@@ -126,15 +144,4 @@ object MoonCalculator {
         return low.plus(Duration.between(low, high).dividedBy(2))
     }
 
-    /** Nombre de la fase lunar en español. */
-    fun phaseOf(phase: Double): MoonPhase = when {
-        phase < 0.03 || phase > 0.97 -> MoonPhase.NEW
-        phase < 0.22 -> MoonPhase.WAXING_CRESCENT
-        phase < 0.28 -> MoonPhase.FIRST_QUARTER
-        phase < 0.47 -> MoonPhase.WAXING_GIBBOUS
-        phase < 0.53 -> MoonPhase.FULL
-        phase < 0.72 -> MoonPhase.WANING_GIBBOUS
-        phase < 0.78 -> MoonPhase.LAST_QUARTER
-        else -> MoonPhase.WANING_CRESCENT
-    }
 }
