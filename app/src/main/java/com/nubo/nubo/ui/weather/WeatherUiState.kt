@@ -164,6 +164,25 @@ data class DataAge(val unit: AgeUnit, val amount: Long)
 enum class AgeUnit { JUST_NOW, MINUTES, HOURS, DAYS }
 
 /** Cada cuánto se refresca el tiempo en segundo plano. */
+/**
+ * Cuánto se agranda la interfaz entera.
+ *
+ * Multiplica la **densidad**, no solo el tamaño de letra: así crecen a la vez
+ * los textos y las cajas que los contienen y las proporciones se mantienen. Con
+ * solo la letra, las casillas de medida fija —la probabilidad, las
+ * temperaturas, el alto de la gráfica— se quedarían igual y el texto las
+ * reventaría.
+ *
+ * Lo que no crece es la pantalla, así que a más tamaño cabe menos: las horas
+ * por bloque y las filas de días se adaptan a lo que queda, no al ajuste.
+ */
+enum class UiScale(val factor: Float) {
+    SMALL(1f),
+    MEDIUM(1.15f),
+    LARGE(1.3f),
+    HUGE(1.45f),
+}
+
 enum class BackgroundInterval(val hours: Long?) {
     OFF(null),
     EVERY_12H(12),
@@ -217,6 +236,8 @@ data class WeatherUiState(
     val alertNotifications: Boolean = false,
     /** Unidades con las que se pintan temperaturas y viento. */
     val units: Units = Units(),
+    /** Cuánto se agranda la interfaz. */
+    val uiScale: UiScale = UiScale.SMALL,
     val isInitialized: Boolean = false,
 ) {
     val currentLocation: SavedLocation? get() = locations.getOrNull(currentIndex)

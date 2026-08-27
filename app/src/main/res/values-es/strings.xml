@@ -208,4 +208,10 @@
         <item quantity="other">%1$d minutos más</item>
     </plurals>
     <string name="same_as_yesterday">Igual que ayer</string>
+    <string name="accessibility">Accesibilidad</string>
+    <string name="interface_size">Tamaño de la interfaz</string>
+    <string name="size_small">Estándar</string>
+    <string name="size_medium">Grande</string>
+    <string name="size_large">Más grande</string>
+    <string name="size_huge">Máximo</string>
 </resources>

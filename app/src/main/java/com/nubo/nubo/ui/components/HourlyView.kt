@@ -91,7 +91,25 @@ import com.nubo.nubo.domain.model.Units
  * en la posición inicial, porque no había ninguna relación entre ese número y
  * el ancho real de la pantalla.
  */
-private const val VISIBLE_HOURS = 6
+/** Cuántas horas se enseñan de una vez cuando hay sitio de sobra. */
+private const val MAX_VISIBLE_HOURS = 6
+
+/** Y el mínimo por debajo del cual el bloque deja de tener sentido. */
+private const val MIN_VISIBLE_HOURS = 3
+
+/**
+ * Lo que necesita una columna para que no se aprieten "12 km/h" ni la hora.
+ *
+ * Es la medida que decide cuántas caben: al agrandar la interfaz los dp crecen
+ * pero la pantalla no, así que el ancho de la tarjeta en dp **encoge** y las
+ * seis de siempre dejarían de caber. También sirve para pantallas estrechas,
+ * donde el problema es el mismo sin haber tocado ningún ajuste.
+ */
+private val MIN_COLUMN_WIDTH = 54.dp
+
+/** Cuántas columnas caben en [cardWidth] sin apretarlas. */
+internal fun visibleHoursIn(cardWidth: Dp, minColumn: Dp = MIN_COLUMN_WIDTH): Int =
+    (cardWidth.value / minColumn.value).toInt().coerceIn(MIN_VISIBLE_HOURS, MAX_VISIBLE_HOURS)
 
 private val CHART_HEIGHT = 110.dp
 
@@ -138,13 +156,10 @@ fun HourlyView(
     // `HourlyForecast.MAX_HOURS` ya es múltiplo de seis, así que normalmente
     // esto no quita nada; hace falta cuando llegan menos horas de las
     // esperadas, por ejemplo al leer una caché ya muy consumida.
-    val hours = remember(forecasts) {
-        val whole = forecasts.size - forecasts.size % VISIBLE_HOURS
-        if (whole == 0) forecasts else forecasts.take(whole)
-    }
+    // Se recorta más abajo, cuando ya se sabe cuántas columnas caben.
 
-    val hasAnyRain = remember(hours) {
-        hours.any { (it.precipitationProbability ?: 0) > 0 }
+    val hasAnyRain = remember(forecasts) {
+        forecasts.any { (it.precipitationProbability ?: 0) > 0 }
     }
     val scrollState = rememberScrollState()
 
@@ -160,9 +175,9 @@ fun HourlyView(
     // Índice de la hora más cercana al momento actual. Se calcula una sola vez
     // aquí y no dentro de cada columna: comparando por separado, dos horas
     // contiguas podían cumplir el criterio y ambas se rotulaban "Ahora".
-    val nowIndex = remember(hours, nowThere) {
-        hours.indices.minByOrNull {
-            java.time.Duration.between(hours[it].dateTime, nowThere).abs().toMillis()
+    val nowIndex = remember(forecasts, nowThere) {
+        forecasts.indices.minByOrNull {
+            java.time.Duration.between(forecasts[it].dateTime, nowThere).abs().toMillis()
         } ?: -1
     }
 
@@ -191,10 +206,19 @@ fun HourlyView(
                 // columnas medían 1158: dos píxeles de desfase por bloque que
                 // desalineaban el carrusel a los pocos gestos.
                 val density = LocalDensity.current
-                val itemPx = columnWidthPx(with(density) { maxWidth.toPx() })
+                val visibleHours = visibleHoursIn(maxWidth)
+                val itemPx = columnWidthPx(with(density) { maxWidth.toPx() }, visibleHours)
                 val itemWidth = with(density) { itemPx.toDp() }
-                val blockPx = itemPx * VISIBLE_HOURS
-                val blockWidth = itemWidth * VISIBLE_HOURS
+                val blockPx = itemPx * visibleHours
+                val blockWidth = itemWidth * visibleHours
+
+                // La lista se recorta a un múltiplo de las columnas visibles
+                // para que el último bloque no se quede a medias, con media
+                // columna cortada a cada lado.
+                val hours = remember(forecasts, visibleHours) {
+                    val whole = forecasts.size - forecasts.size % visibleHours
+                    if (whole == 0) forecasts else forecasts.take(whole)
+                }
 
                 // El gesto vive en toda la tarjeta y no solo en la fila de
                 // columnas: el gráfico ocupa la mitad de abajo y está fuera
@@ -361,7 +385,7 @@ internal fun edgePull(raw: Float, limit: Float): Float =
     if (limit <= 0f) 0f else limit * tanh(raw / limit)
 
 /**
- * Inercia que asienta el carrusel en bloques de [VISIBLE_HOURS] horas.
+ * Inercia que asienta el carrusel en bloques de tantas horas como quepan.
  *
  * El destino se limita a los dos bloques contiguos, así que **un gesto avanza
  * un bloque** por rápido que sea: dejar que la inercia decidiera haría que un
@@ -985,5 +1009,5 @@ internal fun blockTarget(
  * la tarjeta, para que el recorrido total sea un número entero de bloques y el
  * último se pueda alcanzar.
  */
-internal fun columnWidthPx(viewportPx: Float, visibleHours: Int = VISIBLE_HOURS): Float =
+internal fun columnWidthPx(viewportPx: Float, visibleHours: Int = MAX_VISIBLE_HOURS): Float =
     floor(viewportPx / visibleHours).coerceAtLeast(1f)

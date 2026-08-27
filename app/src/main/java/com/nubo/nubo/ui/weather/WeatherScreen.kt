@@ -94,6 +94,9 @@ import com.nubo.nubo.ui.components.toImageVector
 import com.nubo.nubo.ui.theme.SkyGradient
 import com.nubo.nubo.ui.theme.SkyGradients
 import kotlin.math.roundToInt
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.flow.drop
 
 /**
  * Pantalla principal: una página por ciudad, con el fondo del cielo detrás.
@@ -163,8 +166,15 @@ fun WeatherScreen(
     // momento en el que interesa hacer el trabajo pesado. Y es también cuando
     // la página que se abandona ya no se ve, así que reconstruirla ahí no se
     // nota.
+    val haptics = LocalHapticFeedback.current
+
     LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }.collect { settled ->
+        // El primer valor es la página en la que se arranca, no un cambio: sin
+        // saltárselo, la app daría un toque nada más abrirse.
+        snapshotFlow { pagerState.settledPage }.drop(1).collect { settled ->
+            // Marca de paso, la misma que se usa al cruzar una muesca: el
+            // cambio de ciudad es discreto y así se nota sin mirar.
+            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
             onPageSettled(settled)
 
             val settledId = locations.getOrNull(settled)?.locationId
@@ -322,7 +332,14 @@ fun WeatherScreen(
                 // con el mismo `isRefreshing`.
                 PullToRefreshBox(
                     isRefreshing = state.isRefreshing,
-                    onRefresh = onRefreshAll,
+                    onRefresh = {
+                        // El gesto ha pasado del punto en el que dispara: es
+                        // exactamente lo que este toque significa.
+                        haptics.performHapticFeedback(
+                            HapticFeedbackType.GestureThresholdActivate,
+                        )
+                        onRefreshAll()
+                    },
                     state = pullState,
                     modifier = Modifier
                         .fillMaxSize()
@@ -744,7 +761,7 @@ private fun CityPage(
  * que los avisos sobresalían cuatro puntos por cada lado respecto a las horas
  * y al sol. Una constante evita que se vuelva a separar.
  */
-private val CARD_MARGIN = 20.dp
+private val CARD_MARGIN = 12.dp
 
 /**
  * Desplazamiento que recoge la cabecera del todo.

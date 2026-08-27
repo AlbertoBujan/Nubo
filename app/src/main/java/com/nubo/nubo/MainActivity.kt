@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nubo.nubo.data.remote.AvailableUpdate
@@ -32,6 +34,7 @@ import com.nubo.nubo.ui.weather.SearchLocationSheet
 import com.nubo.nubo.ui.weather.UpdateDialog
 import com.nubo.nubo.data.remote.UpdateService
 import com.nubo.nubo.ui.components.LocalUnits
+import com.nubo.nubo.ui.weather.UiScale
 import com.nubo.nubo.ui.weather.AboutDialog
 import com.nubo.nubo.ui.weather.CheckingUpdatesDialog
 import com.nubo.nubo.ui.weather.NotificationsBlockedDialog
@@ -157,12 +160,25 @@ private fun NuboApp(
         }
     }
 
-    CompositionLocalProvider(LocalUnits provides state.units) {
+    // Agrandar la interfaz es multiplicar la densidad: crecen los dp y los sp a
+    // la vez, así que las cajas acompañan a su texto en vez de quedarse
+    // pequeñas. El `fontScale` del sistema se respeta tal cual y se acumula.
+    val density = LocalDensity.current
+    val scaled = remember(density, state.uiScale) {
+        Density(density.density * state.uiScale.factor, density.fontScale)
+    }
+
+    CompositionLocalProvider(
+        LocalUnits provides state.units,
+        LocalDensity provides scaled,
+    ) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             AppDrawer(
                 state = state,
+                uiScale = state.uiScale,
+                onUiScaleChange = viewModel::setUiScale,
                 units = state.units,
                 onUnitsChange = viewModel::setUnits,
                 interval = state.backgroundInterval,

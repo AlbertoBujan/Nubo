@@ -4,6 +4,7 @@ import com.nubo.nubo.ui.components.labelRes
 import com.nubo.nubo.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Air
+import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Straighten
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,9 +43,11 @@ import com.nubo.nubo.domain.model.DistanceUnit
 import com.nubo.nubo.domain.model.SpeedUnit
 import com.nubo.nubo.domain.model.TemperatureUnit
 import com.nubo.nubo.domain.model.Units
+import com.nubo.nubo.ui.components.labelRes
 import com.nubo.nubo.ui.components.nameRes
 import com.nubo.nubo.ui.components.shortRes
 import com.nubo.nubo.work.BackgroundUpdateWorker
+import kotlin.math.roundToInt
 
 /**
  * Ajustes de la app.
@@ -56,6 +61,8 @@ import com.nubo.nubo.work.BackgroundUpdateWorker
  */
 @Composable
 fun SettingsPanel(
+    uiScale: UiScale,
+    onUiScaleChange: (UiScale) -> Unit,
     units: Units,
     onUnitsChange: (Units) -> Unit,
     interval: BackgroundInterval,
@@ -71,6 +78,59 @@ fun SettingsPanel(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 32.dp),
     ) {
+        SectionLabel(stringResource(R.string.accessibility))
+
+        Row(
+            Modifier.padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.FormatSize,
+                null,
+                tint = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.interface_size),
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 15.sp,
+                )
+                Text(
+                    stringResource(uiScale.labelRes),
+                    color = Color(0xFF64B5F6),
+                    fontSize = 13.sp,
+                )
+            }
+        }
+
+        // Cuatro pasos, y el primero es el tamaño de siempre: quien no toque
+        // nada no nota ningún cambio.
+        Slider(
+            value = uiScale.ordinal.toFloat(),
+            onValueChange = { onUiScaleChange(UiScale.entries[it.roundToInt()]) },
+            valueRange = 0f..(UiScale.entries.size - 1).toFloat(),
+            steps = UiScale.entries.size - 2,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+
+        // Las dos letras enseñan a dónde lleva cada extremo mejor que un
+        // rótulo, y de paso se ven ya al tamaño del que hablan.
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("A", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+            Text("A", color = Color.White.copy(alpha = 0.75f), fontSize = 20.sp)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+        Spacer(Modifier.height(12.dp))
+
         SectionLabel(stringResource(R.string.units))
 
         // Cada magnitud tiene dos opciones y nada más, así que la fila enseña

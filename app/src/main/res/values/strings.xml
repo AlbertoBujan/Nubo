@@ -225,4 +225,10 @@
         <item quantity="other">%1$d minutes more</item>
     </plurals>
     <string name="same_as_yesterday">Same as yesterday</string>
+    <string name="accessibility">Accessibility</string>
+    <string name="interface_size">Interface size</string>
+    <string name="size_small">Standard</string>
+    <string name="size_medium">Large</string>
+    <string name="size_large">Larger</string>
+    <string name="size_huge">Largest</string>
 </resources>

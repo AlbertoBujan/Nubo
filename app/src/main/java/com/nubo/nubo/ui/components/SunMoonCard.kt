@@ -66,6 +66,8 @@ import androidx.compose.material.icons.outlined.TrendingDown
 import androidx.compose.material.icons.outlined.TrendingUp
 import com.nubo.nubo.domain.astro.DayLength
 import kotlin.math.abs
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 
 /**
  * Tarjetas gemelas del ciclo solar y lunar.
@@ -96,6 +98,14 @@ fun SunMoonCard(
     if (sunTimes == null) return
 
     val formatter = DateTimeFormatter.ofPattern("HH:mm")
+    val haptics = LocalHapticFeedback.current
+
+    /** Las dos tarjetas se dan la vuelta igual, y se notan igual. */
+    fun flip(showing: Boolean) {
+        haptics.performHapticFeedback(
+            if (showing) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+        )
+    }
 
     // IntrinsicSize.Min mide la más alta y estira la otra hasta igualarla, de
     // modo que las dos tarjetas quedan siempre simétricas aunque el nombre de
@@ -119,7 +129,12 @@ fun SunMoonCard(
             arcColor = Color(0xFFFFB300),
             now = nowThere,
             path = sunPath,
-            onClick = dayLength?.let { { showDayLength = !showDayLength } },
+            onClick = dayLength?.let {
+                {
+                    showDayLength = !showDayLength
+                    flip(showDayLength)
+                }
+            },
             flipped = showDayLength,
             back = dayLength?.let { { DayLengthFacts(it) } },
             modifier = Modifier
@@ -155,7 +170,10 @@ fun SunMoonCard(
                 // Solo la luna se da la vuelta: del sol ya está todo en la
                 // tarjeta, y de la luna lo que falta —cuándo tocan la llena y
                 // la nueva— no cabe sin tapar el arco.
-                onClick = { showPhases = !showPhases },
+                onClick = {
+                    showPhases = !showPhases
+                    flip(showPhases)
+                },
                 flipped = showPhases,
                 back = {
                     MoonMilestones(

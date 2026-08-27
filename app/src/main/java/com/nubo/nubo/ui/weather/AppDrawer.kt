@@ -65,6 +65,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun AppDrawer(
     state: WeatherUiState,
+    uiScale: UiScale,
+    onUiScaleChange: (UiScale) -> Unit,
     units: Units,
     onUnitsChange: (Units) -> Unit,
     interval: BackgroundInterval,
@@ -167,6 +169,8 @@ fun AppDrawer(
                 ) { settings ->
                     if (settings) {
                         SettingsPanel(
+                            uiScale = uiScale,
+                            onUiScaleChange = onUiScaleChange,
                             units = units,
                             onUnitsChange = onUnitsChange,
                             interval = interval,

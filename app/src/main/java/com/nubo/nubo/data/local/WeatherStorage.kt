@@ -155,6 +155,14 @@ class WeatherStorage(private val context: Context) {
         store.edit { prefs -> prefs[BACKGROUND_INTERVAL_KEY] = index }
     }
 
+    // ── Tamaño de la interfaz ───────────────────────────────────────────────
+
+    suspend fun loadUiScaleIndex(): Int = store.data.first()[UI_SCALE_KEY] ?: 0
+
+    suspend fun saveUiScaleIndex(index: Int) {
+        store.edit { prefs -> prefs[UI_SCALE_KEY] = index }
+    }
+
     // ── Unidades ────────────────────────────────────────────────────────────
 
     suspend fun loadUnits(): Units = store.data.first().let { prefs ->
@@ -195,6 +203,7 @@ class WeatherStorage(private val context: Context) {
     }
 
     private companion object {
+        val UI_SCALE_KEY = intPreferencesKey("ui_scale")
         val TEMPERATURE_UNIT_KEY = intPreferencesKey("temperature_unit")
         val SPEED_UNIT_KEY = intPreferencesKey("speed_unit")
         val DISTANCE_UNIT_KEY = intPreferencesKey("distance_unit")

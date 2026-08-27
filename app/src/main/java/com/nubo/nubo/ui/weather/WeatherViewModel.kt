@@ -109,6 +109,7 @@ class WeatherViewModel(
                 ) { BackgroundInterval.OFF },
                 alertNotifications = storage.loadAlertNotifications(),
                 units = storage.loadUnits(),
+                uiScale = UiScale.entries.getOrElse(storage.loadUiScaleIndex()) { UiScale.SMALL },
                 isInitialized = true,
             )
         }
@@ -613,6 +614,13 @@ class WeatherViewModel(
         viewModelScope.launch {
             storage.saveBackgroundIntervalIndex(interval.ordinal)
             _uiState.update { it.copy(backgroundInterval = interval) }
+        }
+    }
+
+    fun setUiScale(scale: UiScale) {
+        viewModelScope.launch {
+            storage.saveUiScaleIndex(scale.ordinal)
+            _uiState.update { it.copy(uiScale = scale) }
         }
     }
 

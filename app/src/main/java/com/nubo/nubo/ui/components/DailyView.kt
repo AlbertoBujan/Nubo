@@ -49,6 +49,9 @@ import com.nubo.nubo.domain.weather.WeatherCode
 import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.roundToInt
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.layout.BoxWithConstraints
 
 /** Predicción de los próximos días, una fila por día. */
 @Composable
@@ -70,6 +73,10 @@ fun DailyView(
     // demás a mano, y bastaría olvidarse de uno para tener dos desplegados.
     var expandedDate by remember { mutableStateOf<LocalDate?>(null) }
 
+    val haptics = LocalHapticFeedback.current
+
+
+
     // Qué días han estrenado ya sus casillas. Abrir, cerrar y volver a abrir la
     // misma tarjeta no vuelve a contar: la animación cuenta que esas cifras se
     // ven por primera vez, y a la tercera vez ya solo estorba. Se olvida con
@@ -80,7 +87,15 @@ fun DailyView(
     val globalMin = remember(forecasts) { forecasts.mapNotNull { it.tempMin }.minOrNull() ?: 0 }
     val globalMax = remember(forecasts) { forecasts.mapNotNull { it.tempMax }.maxOrNull() ?: 1 }
 
-    Column(modifier.fillMaxWidth()) {
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+    // Con la interfaz agrandada —o en una pantalla estrecha— las columnas fijas
+    // se comen el sitio de la barra, que es lo único de la fila que lleva un
+    // dato. Se mide **aquí**, con lo que la fila tiene de verdad: la
+    // configuración del sistema no sabe nada del ajuste de tamaño, así que
+    // preguntarle a ella daba siempre el mismo ancho y la fila se rompía.
+    val compact = maxWidth < COMPACT_WIDTH
+
+    Column(Modifier.fillMaxWidth()) {
         SectionTitle(
             icon = Icons.Outlined.CalendarMonth,
             text = stringResource(R.string.next_days),
@@ -90,6 +105,7 @@ fun DailyView(
         forecasts.forEachIndexed { index, forecast ->
             DailyRow(
                 forecast = forecast,
+                compact = compact,
                 animateFrom = animateFrom,
                 // Escalonadas como las horas: la lista se llena de arriba
                 // abajo en vez de encenderse entera de golpe.
@@ -102,16 +118,31 @@ fun DailyView(
                 expanded = expandedDate == forecast.date,
                 tilesAnimateFrom = forecast.date.takeIf { animatedDays[it] != true },
                 onTilesAnimated = { animatedDays[forecast.date] = true },
-                onToggle = { expandedDate = toggledExpansion(expandedDate, forecast.date) },
+                onToggle = {
+                    val next = toggledExpansion(expandedDate, forecast.date)
+                    // Abrir y cerrar se notan distinto, que es lo que
+                    // distinguen estos dos toques.
+                    haptics.performHapticFeedback(
+                        if (next == null) {
+                            HapticFeedbackType.ToggleOff
+                        } else {
+                            HapticFeedbackType.ToggleOn
+                        },
+                    )
+                    expandedDate = next
+                },
             )
             Spacer(Modifier.height(6.dp))
         }
+    }
     }
 }
 
 @Composable
 private fun DailyRow(
     forecast: DailyForecast,
+    /** Sin sitio: día abreviado y columnas justas. */
+    compact: Boolean,
     animateFrom: Any?,
     animationDelay: Int,
     alerts: List<WeatherAlert>,
@@ -163,11 +194,16 @@ private fun DailyRow(
                     // todo lo que se recorta aquí se lo lleva la barra, que es
                     // lo único que crece con el dato y lo único que se compara
                     // de un día a otro.
-                    .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+                    .padding(
+                        start = if (compact) 10.dp else 14.dp,
+                        end = if (compact) 6.dp else 8.dp,
+                        top = 12.dp,
+                        bottom = 12.dp,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = dayLabel(forecast.date, today),
+                    text = dayLabel(forecast.date, today, compact),
                     color = if (isToday) Color.White else Color.White.copy(alpha = 0.75f),
                     fontSize = 15.sp,
                     fontWeight = if (isToday) FontWeight.W600 else FontWeight.Normal,
@@ -175,7 +211,7 @@ private fun DailyRow(
                     // Da para el día más largo —"Wednesday", "Miércoles"— con
                     // un dedo de aire. Es fijo para que los iconos de todas las
                     // filas queden en la misma columna.
-                    modifier = Modifier.width(88.dp),
+                    modifier = Modifier.width(if (compact) 62.dp else 88.dp),
                 )
 
                 Icon(
@@ -184,12 +220,12 @@ private fun DailyRow(
                         WeatherCode.fromCode(forecast.skyStateCode).description.labelRes,
                     ),
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(if (compact) 22.dp else 24.dp),
                 )
 
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(if (compact) 6.dp else 8.dp))
 
-                Box(Modifier.width(38.dp)) {
+                Box(Modifier.width(if (compact) 30.dp else 38.dp)) {
                     val chance = forecast.precipitationProbability ?: 0
                     val counted = countUpTo(chance, animateFrom, animationDelay) ?: 0
                     if (chance > 0) {
@@ -215,7 +251,7 @@ private fun DailyRow(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.W600,
                     textAlign = TextAlign.End,
-                    modifier = Modifier.width(38.dp),
+                    modifier = Modifier.width(if (compact) 32.dp else 38.dp),
                 )
 
                 TemperatureRangeBar(
@@ -227,7 +263,7 @@ private fun DailyRow(
                     height = 8.dp,
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 5.dp),
+                        .padding(horizontal = if (compact) 4.dp else 5.dp),
                 )
 
                 val high = countUpTo(
@@ -240,7 +276,7 @@ private fun DailyRow(
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.W600,
-                    modifier = Modifier.width(38.dp),
+                    modifier = Modifier.width(if (compact) 32.dp else 38.dp),
                 )
 
                 // Sin flecha, nadie descubre que la fila se abre.
@@ -251,7 +287,7 @@ private fun DailyRow(
                     ),
                     tint = Color.White.copy(alpha = 0.5f),
                     modifier = Modifier
-                        .size(20.dp)
+                        .size(if (compact) 18.dp else 20.dp)
                         .rotate(chevronTurn),
                 )
             }
@@ -431,12 +467,28 @@ private const val ROW_STAGGER_MILLIS = 45
 private val ALERT_DOT_SIZE = 9.dp
 
 @Composable
-private fun dayLabel(date: LocalDate, today: LocalDate): String = when (date) {
+private fun dayLabel(date: LocalDate, today: LocalDate, compact: Boolean): String = when (date) {
     today -> stringResource(R.string.today)
     today.plusDays(1) -> stringResource(R.string.tomorrow)
     // Sin locale explícito: el nombre del día sale en el idioma del teléfono,
-    // que es justo lo que hay que hacer ahora que la interfaz se traduce.
+    // que es justo lo que hay que hacer ahora que la interfaz se traduce. La
+    // forma corta la da el propio `java.time`, así que "Mié" y "Wed" salen bien
+    // sin recortar letras a mano.
     else -> date.dayOfWeek
-        .getDisplayName(java.time.format.TextStyle.FULL, Locale.getDefault())
+        .getDisplayName(
+            if (compact) java.time.format.TextStyle.SHORT else java.time.format.TextStyle.FULL,
+            Locale.getDefault(),
+        )
         .replaceFirstChar { it.uppercase(Locale.getDefault()) }
+        .removeSuffix(".")
 }
+
+/**
+ * Por debajo de este ancho la fila de un día pasa a su forma corta.
+ *
+ * Sale de sumar lo que ocupan las columnas fijas dejando a la barra un tramo
+ * que todavía diga algo. Está por debajo de lo que mide la fila en un móvil
+ * estrecho a tamaño normal —336 dp— a propósito: ahí el nombre entero todavía
+ * entra, y abreviarlo sin necesidad sería peor.
+ */
+private val COMPACT_WIDTH = 320.dp

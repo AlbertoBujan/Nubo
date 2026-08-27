@@ -14,6 +14,7 @@ import com.nubo.nubo.domain.weather.UvBand
 import com.nubo.nubo.domain.weather.WeatherDescription
 import com.nubo.nubo.ui.weather.AgeUnit
 import com.nubo.nubo.ui.weather.BackgroundInterval
+import com.nubo.nubo.ui.weather.UiScale
 import com.nubo.nubo.ui.weather.DataAge
 import com.nubo.nubo.domain.model.DistanceUnit
 import com.nubo.nubo.domain.model.SpeedUnit
@@ -202,4 +203,13 @@ val DistanceUnit.shortRes: Int
     @StringRes get() = when (this) {
         DistanceUnit.KILOMETRES -> R.string.unit_km_short
         DistanceUnit.MILES -> R.string.unit_miles_short
+    }
+
+/** Nombre del paso de tamaño, para enseñar cuál está puesto. */
+val UiScale.labelRes: Int
+    @StringRes get() = when (this) {
+        UiScale.SMALL -> R.string.size_small
+        UiScale.MEDIUM -> R.string.size_medium
+        UiScale.LARGE -> R.string.size_large
+        UiScale.HUGE -> R.string.size_huge
     }
