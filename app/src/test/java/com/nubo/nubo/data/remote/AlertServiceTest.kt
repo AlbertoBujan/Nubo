@@ -137,17 +137,43 @@ class AlertServiceTest {
     fun `descarta los avisos de otra zona de la misma provincia`() {
         // El fallo que arrastraba la app: filtrando por el prefijo "7115"
         // entraban las cuatro zonas de A Coruña, así que a Curtis —interior—
-        // le llegaban los avisos costeros del Noroeste y del Oeste.
-        val body = alertXml("711501", "rojo", event = "Costeros") +
-            alertXml("711502", "naranja", event = "Costeros") +
+        // le llegaban los avisos del Noroeste y del Oeste.
+        val body = alertXml("711501", "rojo", event = "Vientos") +
+            alertXml("711502", "naranja", event = "Vientos") +
             alertXml(zona, "amarillo", event = "Lluvias") +
-            alertXml("711504", "rojo", event = "Costeros")
+            alertXml("711504", "rojo", event = "Vientos")
 
         val alerts = service.parseCapAlerts(body, zona)
 
         assertEquals(1, alerts.size)
         assertEquals("Lluvias", alerts[0].event)
         assertEquals("amarillo", alerts[0].nivel)
+    }
+
+    @Test
+    fun `un municipio costero recibe los avisos de su franja de costa`() {
+        // Lo que AEMET publica de verdad: el aviso costero no va a la zona
+        // terrestre "711501" sino a "711501C", "Costa - Noroeste de A Coruña".
+        // Con la igualdad a secas no llegaba ninguno.
+        val noroeste = "711501"
+        val body = alertXml("${noroeste}C", "naranja", event = "Aviso de costeros de nivel naranja") +
+            alertXml(noroeste, "amarillo", event = "Vientos")
+
+        val alerts = service.parseCapAlerts(body, noroeste)
+
+        assertEquals(2, alerts.size)
+        assertEquals("naranja", alerts[0].nivel)
+        assertEquals("amarillo", alerts[1].nivel)
+    }
+
+    @Test
+    fun `no recibe la franja costera de otra zona`() {
+        // Curtis es interior y no tiene costa; Oeste sí, pero no la del
+        // Noroeste. Las dos tienen que seguir sin ver ese aviso.
+        val body = alertXml("711501C", "naranja", event = "Costeros")
+
+        assertTrue(service.parseCapAlerts(body, zona).isEmpty())
+        assertTrue(service.parseCapAlerts(body, "711502").isEmpty())
     }
 
     @Test

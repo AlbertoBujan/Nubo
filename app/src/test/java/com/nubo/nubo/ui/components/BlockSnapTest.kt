@@ -253,4 +253,47 @@ class EdgePullTest {
     fun `antes de medir la tarjeta no se mueve nada`() {
         assertEquals(0f, edgePull(500f, 0f), 0f)
     }
+
+    // ── Volver sin soltar el dedo ──────────────────────────────────────────
+
+    @Test
+    fun `volver hacia dentro recoge el empuje antes que nada`() {
+        // Empujado 20 px contra el principio; el dedo vuelve 5: los cinco
+        // son para el empuje y el carrusel no recorre nada.
+        assertEquals(-5f, retraction(pull = 20f, delta = -5f), 0f)
+        // Y contra el final, igual pero al revés.
+        assertEquals(5f, retraction(pull = -20f, delta = 5f), 0f)
+    }
+
+    @Test
+    fun `lo que sobra de la vuelta es avance del carrusel`() {
+        // Solo quedaban 20 px de empuje: se gastan esos y no más.
+        assertEquals(-20f, retraction(pull = 20f, delta = -50f), 0f)
+    }
+
+    @Test
+    fun `seguir empujando contra el tope no lo recoge`() {
+        assertEquals(0f, retraction(pull = 20f, delta = 5f), 0f)
+        assertEquals(0f, retraction(pull = -20f, delta = -5f), 0f)
+    }
+
+    @Test
+    fun `sin empuje la vuelta entera es del carrusel`() {
+        assertEquals(0f, retraction(pull = 0f, delta = -30f), 0f)
+    }
+
+    @Test
+    fun `el arrastre acumulado se recupera a partir del empuje`() {
+        listOf(-300f, -40f, 0f, 15f, 60f, 200f).forEach { raw ->
+            assertEquals("con $raw", raw, rawForPull(edgePull(raw, limit), limit), 0.5f)
+        }
+    }
+
+    @Test
+    fun `con el empuje en el tope el arrastre sigue siendo finito`() {
+        // Tras un tirón largo la tangente redondea justo al tope.
+        val raw = rawForPull(edgePull(100_000f, limit), limit)
+        assertTrue("salió $raw", raw.isFinite())
+        assertTrue(rawForPull(-limit, limit).isFinite())
+    }
 }

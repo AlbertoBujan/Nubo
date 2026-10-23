@@ -72,6 +72,7 @@ import com.nubo.nubo.domain.weather.WeatherCode
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
+import kotlin.math.atanh
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -301,6 +302,16 @@ fun HourlyView(
  */
 private fun stayInsideCard(edge: EdgeResistance) = object : NestedScrollConnection {
 
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        // Volver sin soltar el dedo primero recoge el empuje y solo lo que
+        // sobre mueve las horas. Si el carrusel se llevaba el movimiento
+        // —que ya podía, porque se aleja del tope—, el empuje no recibía nada
+        // con lo que deshacerse y la franja vacía del borde viajaba con el
+        // contenido hasta soltar.
+        if (source != NestedScrollSource.UserInput) return Offset.Zero
+        return Offset(edge.retract(available.x), 0f)
+    }
+
     override fun onPostScroll(
         consumed: Offset,
         available: Offset,
@@ -353,6 +364,23 @@ private class EdgeResistance {
         pull = edgePull(raw, limit)
     }
 
+    /**
+     * Deshace el empuje con un movimiento en sentido contrario y devuelve lo
+     * que se ha gastado en ello, que es lo que el carrusel ya no debe recorrer.
+     *
+     * Se deshace en píxeles **visibles**, no en arrastre acumulado: de vuelta
+     * el contenido sigue al dedo uno a uno. Descontándolo de [raw], tras un
+     * tirón largo —donde la tangente ya está plana— el dedo volvía un buen
+     * trecho sin que el borde se moviera.
+     */
+    fun retract(delta: Float): Float {
+        val back = retraction(pull, delta)
+        if (back == 0f) return 0f
+        pull += back
+        raw = rawForPull(pull, limit)
+        return back
+    }
+
     suspend fun release() {
         if (pull == 0f) {
             raw = 0f
@@ -383,6 +411,29 @@ private val MAX_EDGE_PULL = 28.dp
  */
 internal fun edgePull(raw: Float, limit: Float): Float =
     if (limit <= 0f) 0f else limit * tanh(raw / limit)
+
+/**
+ * Inverso de [edgePull]: el arrastre acumulado que da ese [pull].
+ *
+ * La proporción se acota por debajo de uno porque, tras un tirón largo, la
+ * tangente redondea justo al tope en `Float` y su inversa sería infinita.
+ */
+internal fun rawForPull(pull: Float, limit: Float): Float =
+    if (limit <= 0f) 0f else limit * atanh((pull / limit).coerceIn(-MAX_PULL_RATIO, MAX_PULL_RATIO))
+
+private const val MAX_PULL_RATIO = 0.999f
+
+/**
+ * Parte de [delta] que se lleva deshacer un empuje de [pull].
+ *
+ * Solo cuenta lo que va en sentido contrario al empuje, y nunca más de lo que
+ * hay que deshacer: lo que sobre es avance de verdad y es del carrusel.
+ */
+internal fun retraction(pull: Float, delta: Float): Float = when {
+    pull == 0f || delta == 0f || (pull > 0f) == (delta > 0f) -> 0f
+    abs(delta) >= abs(pull) -> -pull
+    else -> delta
+}
 
 /**
  * Inercia que asienta el carrusel en bloques de tantas horas como quepan.

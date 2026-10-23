@@ -156,12 +156,21 @@ class AlertService(
      * primeros dígitos —área y provincia— entraban los avisos de **todas** las
      * zonas de la provincia: A Coruña tiene cuatro, y a un municipio del
      * interior le llegaban los avisos costeros de las otras tres.
+     *
+     * Los avisos costeros no van a la zona terrestre sino a su franja de
+     * costa, que AEMET codifica como la misma zona con una `C` detrás
+     * (`711501` → `711501C`, "Costa - Noroeste de A Coruña"). Comparando solo
+     * con `zona_comarcal` no casaba ninguno, y un temporal naranja en todo el
+     * litoral gallego no aparecía en ningún municipio de la costa. Sigue
+     * siendo igualdad, contra dos valores exactos: las zonas de interior no
+     * tienen franja costera, así que a ellas no les llega nada nuevo.
      */
     private fun matchesZona(info: Element, zonaAviso: String): Boolean {
+        val accepted = setOf(zonaAviso, zonaAviso + COASTAL_SUFFIX)
         var matches = false
         info.eachChild("area") { area ->
             area.eachChild("geocode") { geocode ->
-                if (geocode.childText("value") == zonaAviso) matches = true
+                if (geocode.childText("value") in accepted) matches = true
             }
         }
         return matches
@@ -172,6 +181,13 @@ class AlertService(
 
         /** Área (2) + provincia (2) + zona (2). */
         val ZONA_AVISO = Regex("""\d{6}""")
+
+        /**
+         * Sufijo de la franja costera de una zona. Comprobado contra el CAP
+         * nacional: las 51 zonas costeras de España lo llevan, es el único
+         * sufijo que aparece y todas tienen su gemela en el maestro.
+         */
+        const val COASTAL_SUFFIX = "C"
 
         /**
          * Cada aviso completo.
