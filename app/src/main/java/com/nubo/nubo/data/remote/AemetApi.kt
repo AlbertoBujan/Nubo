@@ -9,7 +9,10 @@ import org.json.JSONObject
  * temporal firmada en el campo `datos`, y el contenido real hay que pedirlo a
  * esa segunda URL (esta ya sin api_key).
  */
-class AemetApi(private val http: HttpClient = HttpClient()) {
+class AemetApi(
+    private val http: HttpClient = HttpClient(),
+    private val keyring: AemetKeyring = AemetKeyring(http),
+) {
 
     /**
      * Resuelve un endpoint de AEMET y devuelve el cuerpo del paso 2.
@@ -17,11 +20,31 @@ class AemetApi(private val http: HttpClient = HttpClient()) {
      * Devuelve `null` si cualquiera de los dos pasos falla, para que quien
      * llame degrade con elegancia: un fallo de AEMET no debe tumbar la app,
      * solo dejarla sin avisos.
+     *
+     * Antes de darse por vencido mira si hay una **clave nueva publicada** y
+     * repite una vez. Es el caso que importa: cuando la clave embebida caduca,
+     * AEMET contesta 401 a todo y sin esto la app se quedaría sin avisos hasta
+     * que alguien publicase otra versión. Solo se reintenta una vez y solo con
+     * una clave distinta de la que acaba de fallar, así que un apagón de AEMET
+     * no se convierte en un bucle. Ver [AemetKeyring].
      */
     suspend fun fetchData(path: String, timeoutSeconds: Long = 15): String? {
+        val key = keyring.current()
+        attempt(path, timeoutSeconds, key)?.let { return it }
+
+        val renewed = keyring.renewed(key) ?: return null
+        return attempt(path, timeoutSeconds, renewed)
+    }
+
+    /** Los dos pasos del protocolo con una clave concreta. */
+    private suspend fun attempt(
+        path: String,
+        timeoutSeconds: Long,
+        apiKey: String,
+    ): String? {
         val step1 = http.get(
             "$BASE_URL$path",
-            headers = mapOf("api_key" to API_KEY),
+            headers = mapOf("api_key" to apiKey),
             timeoutSeconds = timeoutSeconds,
         )
         if (!step1.isSuccess) return null
@@ -32,6 +55,10 @@ class AemetApi(private val http: HttpClient = HttpClient()) {
             null
         } ?: return null
 
+        // El 401 por clave caducada también llega **aquí**: la URL firmada del
+        // paso 1 se entrega igualmente y es la descarga la que lo devuelve,
+        // envuelta en un 500. Por eso el reintento cuelga de fetchData y no de
+        // un código concreto del primer paso.
         val step2 = http.get(datosUrl, timeoutSeconds = timeoutSeconds)
         if (!step2.isSuccess) return null
 
@@ -47,12 +74,17 @@ class AemetApi(private val http: HttpClient = HttpClient()) {
         // así que moverla ahora no la des-filtraría. Conviene rotarla y
         // servirla desde el build si en algún momento pasa a importar.
         //
-        // **Caduca.** Esta vale hasta el 18/02/2027 —lleva la fecha dentro,
-        // en el campo `exp` del JWT— y al pasarse el plazo AEMET empieza a
-        // contestar 401 a casi todo, con lo que la app se queda sin avisos sin
-        // decir nada. La anterior murió así. Se renueva pidiendo otra en
+        // **Caduca**, y por eso esta es solo el respaldo: la clave viva se
+        // publica en `aemet-key.json`, en la raíz del repositorio, y la app la
+        // baja sola en cuanto AEMET falla. Ver [AemetKeyring]. Esta de aquí es
+        // la que se usa mientras funcione y la que salva el primer arranque
+        // sin acceso a GitHub; conviene actualizarla de vez en cuando, pero ya
+        // no hace falta publicar una versión para renovar.
+        //
+        // Esta vale hasta el 18/02/2027 —lleva la fecha dentro, en el campo
+        // `exp` del JWT—. Se renueva pidiendo otra en
         // https://opendata.aemet.es/centrodedescargas/obtencionAPIKey, con un
-        // correo y un captcha, y sustituyendo esta.
+        // correo y un captcha, y escribiéndola en `aemet-key.json`.
         const val API_KEY =
             "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiaXJ0ZWJzQGdtYWlsLmNvbSIsImp0aSI6IjJ" +
                 "kMjMyZGEwLWM4YTgtNDQwZS05ZGU2LTNlNmU1YWUzZGJhYSIsImV4cCI6MTgwMjkzOTI" +

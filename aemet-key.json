@@ -1,0 +1,5 @@
+{
+  "_comentario": "Clave de AEMET OpenData que usa Nubo. La app la lee de aqui cuando la que lleva embebida deja de funcionar, asi que renovarla es editar este fichero y empujarlo: sin release y sin reinstalar nada. Se pide en https://opendata.aemet.es/centrodedescargas/obtencionAPIKey (correo y captcha). No es un secreto: viaja en cada APK publicado.",
+  "key": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiaXJ0ZWJzQGdtYWlsLmNvbSIsImp0aSI6IjJkMjMyZGEwLWM4YTgtNDQwZS05ZGU2LTNlNmU1YWUzZGJhYSIsImV4cCI6MTgwMjkzOTIxNSwiaXNzIjoiQUVNRVQiLCJpYXQiOjE3OTQyOTkyMTUsInVzZXJJZCI6IjJkMjMyZGEwLWM4YTgtNDQwZS05ZGU2LTNlNmU1YWUzZGJhYSIsInJvbGUiOiIifQ.gxi7pJ2cNddkcpG_YCwarT_UYKL-Meu9Yt7tQ9YvnTA",
+  "expires": "2027-02-18"
+}

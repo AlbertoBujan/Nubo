@@ -32,8 +32,8 @@ android {
         //
         // 1.0.0 es la primera versión nativa en Kotlin, sucesora de la 0.1.36
         // en Flutter.
-        versionCode = 15
-        versionName = "1.4.3"
+        versionCode = 16
+        versionName = "1.4.4"
     }
 
     signingConfigs {
