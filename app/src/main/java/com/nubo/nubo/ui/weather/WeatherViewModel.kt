@@ -6,6 +6,7 @@ import com.nubo.nubo.data.local.WeatherStorage
 import com.nubo.nubo.data.location.LocationException
 import com.nubo.nubo.data.remote.OpenMeteoException
 import com.nubo.nubo.data.repository.AlertRepository
+import com.nubo.nubo.data.repository.AlertsResult
 import com.nubo.nubo.data.repository.LocationRepository
 import com.nubo.nubo.data.repository.WeatherRepository
 import com.nubo.nubo.data.repository.WeatherRepositoryException
@@ -228,8 +229,16 @@ class WeatherViewModel(
         refreshAstro(locationId)
         updateSunPhase()
 
-        // Un fallo de AEMET no debe invalidar la predicción ya obtenida.
-        val alerts = runCatching { alertRepository.getAlerts(location) }.getOrDefault(emptyList())
+        // Un fallo de AEMET no debe invalidar la predicción ya obtenida —ni los
+        // avisos que ya se conocían: si no se ha podido preguntar se conserva
+        // lo que hubiera, igual que con la calidad del aire. Solo una
+        // respuesta de verdad sustituye a la anterior, y la lista vacía lo es.
+        val fetched = runCatching { alertRepository.getAlerts(location) }
+            .getOrDefault(AlertsResult.Unavailable)
+        val alerts = when (fetched) {
+            is AlertsResult.Fetched -> fetched.alerts
+            AlertsResult.Unavailable -> _uiState.value.cities[locationId]?.alerts.orEmpty()
+        }
         updateCity(locationId) { it.copy(alerts = alerts) }
 
         storage.saveWeather(

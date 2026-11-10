@@ -51,7 +51,10 @@ interface LocationRepository {
 
     /**
      * Zona de aviso de AEMET de una localización española, o `null` si está
-     * fuera de España. Ver [AemetZoneService].
+     * fuera de España **o si no se ha podido resolver**: el maestro de
+     * municipios del que sale se descarga de AEMET, y cuando AEMET falla no
+     * hay zona. Quien llame tiene que saber de cuál de las dos se trata, y
+     * para eso mira primero el país. Ver [AemetZoneService].
      */
     suspend fun zonaAvisoFor(location: SavedLocation): String?
 
@@ -164,22 +167,53 @@ class WeatherRepositoryImpl(
 // ── Avisos ──────────────────────────────────────────────────────────────────
 
 interface AlertRepository {
-    suspend fun getAlerts(location: SavedLocation): List<WeatherAlert>
+    suspend fun getAlerts(location: SavedLocation): AlertsResult
+}
+
+/**
+ * Lo que se sabe de los avisos después de preguntar.
+ *
+ * Una ciudad sin avisos y una ciudad cuyos avisos no se han podido pedir se
+ * pintan igual —no hay nada que enseñar—, pero no son lo mismo: la primera es
+ * una respuesta y la segunda es la falta de respuesta. Mientras las dos fueron
+ * la lista vacía, cada fallo de AEMET **borraba** los avisos que la ciudad ya
+ * tenía, guardados incluidos, y con las notificaciones encendidas olvidaba
+ * además haberlos anunciado, así que al volver el servicio los anunciaba otra
+ * vez. Es el mismo reparto que hace `UpdateService.UpdateCheck`, y por el
+ * mismo motivo: callar y decir "no hay nada" son cosas distintas.
+ */
+sealed interface AlertsResult {
+    /** AEMET contestó. La lista vacía también es una respuesta: no hay avisos. */
+    data class Fetched(val alerts: List<WeatherAlert>) : AlertsResult
+
+    /** No se pudo preguntar. Lo último que se supo sigue siendo lo mejor que hay. */
+    data object Unavailable : AlertsResult
 }
 
 /**
  * Avisos de la localización, si los hay para su país.
  *
- * Hoy la única fuente es AEMET, así que fuera de España no hay avisos y la
- * lista viene vacía. Ahí es donde entrarían MeteoAlarm para Europa o el NWS
- * para Estados Unidos.
+ * Hoy la única fuente es AEMET, así que fuera de España no hay avisos: eso es
+ * una respuesta, no un fallo, y por eso sale como lista vacía y no como
+ * [AlertsResult.Unavailable]. Ahí es donde entrarían MeteoAlarm para Europa o
+ * el NWS para Estados Unidos.
+ *
+ * Dentro de España, en cambio, quedarse sin zona sí es no poder preguntar: la
+ * zona sale del maestro de municipios, que se descarga de AEMET con la misma
+ * clave, y falla cuando falla el resto.
  */
 class AlertRepositoryImpl(
     private val locationRepository: LocationRepository,
     private val alertService: AlertService = AlertService(),
 ) : AlertRepository {
-    override suspend fun getAlerts(location: SavedLocation): List<WeatherAlert> {
-        val zona = locationRepository.zonaAvisoFor(location) ?: return emptyList()
+    override suspend fun getAlerts(location: SavedLocation): AlertsResult {
+        if (!location.isInSpain) return AlertsResult.Fetched(emptyList())
+
+        val zona = locationRepository.zonaAvisoFor(location)
+            ?: return AlertsResult.Unavailable
+
         return alertService.fetchAlerts(zona, zoneOf(location.timeZone))
+            ?.let { AlertsResult.Fetched(it) }
+            ?: AlertsResult.Unavailable
     }
 }

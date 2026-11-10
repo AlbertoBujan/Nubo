@@ -20,20 +20,26 @@ import javax.xml.parsers.DocumentBuilderFactory
  * 2. Los avisos se piden por área (comunidad autónoma), así que hay que filtrar
  *    después mirando el `geocode` de cada zona.
  */
-class AlertService(
+open class AlertService(
     private val aemet: AemetApi = AemetApi(),
 ) {
 
     /**
-     * Avisos vigentes para un municipio, identificado por su código INE.
+     * Avisos vigentes para una zona de aviso, o `null` si no se ha podido
+     * preguntar.
      *
-     * Nunca lanza: si AEMET falla, devuelve lista vacía. Quedarse sin avisos es
-     * preferible a que la pantalla del tiempo no cargue.
+     * Nunca lanza: un fallo de AEMET no debe tumbar la pantalla del tiempo.
+     * Pero sí se distingue de una respuesta vacía, que significa otra cosa —no
+     * hay avisos— y es la única de las dos que debe sustituir a lo que ya se
+     * sabía. Devolviendo lista vacía para ambas, cada 401 de AEMET borraba los
+     * avisos que la ciudad ya tenía.
      */
-    suspend fun fetchAlerts(zonaAviso: String, zone: ZoneId): List<WeatherAlert> {
-        // Sin zona no se puede filtrar, y devolver los de toda la comunidad
-        // sería peor que no devolver ninguno.
-        if (!ZONA_AVISO.matches(zonaAviso)) return emptyList()
+    open suspend fun fetchAlerts(zonaAviso: String, zone: ZoneId): List<WeatherAlert>? {
+        // Sin una zona con la forma que toca no se puede filtrar, y devolver
+        // los de toda la comunidad sería peor que no devolver ninguno. No es
+        // un fallo del servicio, pero tampoco una respuesta: no se ha llegado
+        // a preguntar.
+        if (!ZONA_AVISO.matches(zonaAviso)) return null
 
         // Los dos primeros dígitos de la zona son el área por la que pregunta
         // el servicio, así que no hace falta ninguna tabla aparte.
@@ -43,11 +49,11 @@ class AlertService(
             val body = aemet.fetchData(
                 "/api/avisos_cap/ultimoelaborado/area/$area",
                 timeoutSeconds = TIMEOUT_SECONDS,
-            ) ?: return emptyList()
+            ) ?: return null
 
             parseCapAlerts(body, zonaAviso, zone)
         } catch (_: Exception) {
-            emptyList()
+            null
         }
     }
 

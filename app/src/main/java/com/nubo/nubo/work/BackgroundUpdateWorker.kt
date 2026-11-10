@@ -10,6 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.nubo.nubo.data.notification.AlertNotifier
+import com.nubo.nubo.data.repository.AlertsResult
 import com.nubo.nubo.di.ServiceLocator
 import com.nubo.nubo.domain.model.zoneOf
 import com.nubo.nubo.domain.weather.AlertNotifications
@@ -51,8 +52,19 @@ class BackgroundUpdateWorker(
         for (location in locations) {
             try {
                 val forecast = weatherRepository.getForecast(location)
-                val alerts = runCatching { alertRepository.getAlerts(location) }
-                    .getOrDefault(emptyList())
+
+                // Si AEMET no ha contestado se conservan los avisos ya
+                // guardados. Escribir la lista vacía no solo los borraría de
+                // la caché: más abajo ninguno entraría en `stillActive`, así
+                // que la poda olvidaría haberlos anunciado y al volver el
+                // servicio sonarían otra vez como si fuesen nuevos.
+                val fetched = runCatching { alertRepository.getAlerts(location) }
+                    .getOrDefault(AlertsResult.Unavailable)
+                val alerts = when (fetched) {
+                    is AlertsResult.Fetched -> fetched.alerts
+                    AlertsResult.Unavailable ->
+                        storage.loadWeather(location.locationId)?.alerts.orEmpty()
+                }
 
                 storage.saveWeather(
                     locationId = location.locationId,
