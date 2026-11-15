@@ -456,6 +456,15 @@ private fun DayConditions(
                     )
                 }
             }
+
+            // El mismo hueco al otro lado. Reservar la columna de discos solo
+            // por la izquierda dejaba la rejilla igual en todos los días —que
+            // era el objetivo— pero media columna corrida a la derecha dentro
+            // de la tarjeta: los cuatro valores no caían en el centro de
+            // nada. Las dos cosas se piden a la vez, y un hueco simétrico las
+            // da las dos: la rejilla va centrada en la tarjeta **y** no se
+            // mueve haya avisos o no.
+            Spacer(Modifier.width(ALERT_COLUMN_WIDTH))
         }
     }
 }
