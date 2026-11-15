@@ -148,12 +148,34 @@ class WeatherStorage(private val context: Context) {
 
     // ── Preferencia de actualización en segundo plano ────────────────────────
 
-    suspend fun loadBackgroundIntervalIndex(): Int =
-        store.data.first()[BACKGROUND_INTERVAL_KEY] ?: 0
+    /**
+     * El intervalo elegido, por su nombre, o `null` si nunca se guardó así.
+     *
+     * Se guarda el nombre y no la posición para que añadir una opción en medio
+     * de la lista no reinterprete lo que el usuario ya había elegido. Quien
+     * traduce ese nombre a un valor del enum es el ViewModel: aquí no se
+     * conoce el enum, que vive en la capa de interfaz.
+     */
+    suspend fun loadBackgroundInterval(): String? =
+        store.data.first()[BACKGROUND_INTERVAL_NAME_KEY]
 
-    suspend fun saveBackgroundIntervalIndex(index: Int) {
-        store.edit { prefs -> prefs[BACKGROUND_INTERVAL_KEY] = index }
+    suspend fun saveBackgroundInterval(name: String) {
+        store.edit { prefs ->
+            prefs[BACKGROUND_INTERVAL_NAME_KEY] = name
+            // La clave vieja ya no la lee nadie una vez hay nombre; dejarla
+            // solo serviría para que una lectura futura dudase de cuál manda.
+            prefs.remove(BACKGROUND_INTERVAL_KEY)
+        }
     }
+
+    /**
+     * La posición guardada por las versiones anteriores a 1.4.5.
+     *
+     * Solo se consulta mientras no haya nombre, para no perder el ajuste de
+     * quien viene de una instalación antigua.
+     */
+    suspend fun loadLegacyBackgroundIntervalIndex(): Int? =
+        store.data.first()[BACKGROUND_INTERVAL_KEY]
 
     // ── Tamaño de la interfaz ───────────────────────────────────────────────
 
@@ -211,6 +233,7 @@ class WeatherStorage(private val context: Context) {
         val NOTIFIED_ALERTS_KEY = stringSetPreferencesKey("notified_alerts")
         val LOCATIONS_KEY = stringSetPreferencesKey("saved_locations")
         val BACKGROUND_INTERVAL_KEY = intPreferencesKey("bg_update_interval")
+        val BACKGROUND_INTERVAL_NAME_KEY = stringPreferencesKey("bg_update_interval_name")
 
         fun weatherKey(locationId: String) =
             stringPreferencesKey("weather_data_$locationId")

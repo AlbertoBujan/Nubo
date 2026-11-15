@@ -51,6 +51,7 @@
     <string name="background_updates">Actualización en segundo plano</string>
     <string name="background_updates_hint">Cada cuánto descarga Nubo la predicción sin abrir la app.</string>
     <string name="interval_off">Desactivado</string>
+    <string name="interval_6h">Cada 6 horas</string>
     <string name="interval_12h">Cada 12 horas</string>
     <string name="interval_24h">Cada 24 horas</string>
     <string name="application">Aplicación</string>
@@ -87,6 +88,7 @@
     <string name="alert_avalanche">Aludes</string>
     <string name="alert_thaw">Deshielos</string>
     <string name="level_yellow">Amarillo</string>
+    <string name="alert_badge">%1$s, %2$s</string>
     <string name="level_orange">Naranja</string>
     <string name="level_red">Rojo</string>
 

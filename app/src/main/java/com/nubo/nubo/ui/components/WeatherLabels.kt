@@ -108,6 +108,7 @@ val AlertLevel.labelRes: Int
 val BackgroundInterval.labelRes: Int
     get() = when (this) {
         BackgroundInterval.OFF -> R.string.interval_off
+        BackgroundInterval.EVERY_6H -> R.string.interval_6h
         BackgroundInterval.EVERY_12H -> R.string.interval_12h
         BackgroundInterval.EVERY_24H -> R.string.interval_24h
     }

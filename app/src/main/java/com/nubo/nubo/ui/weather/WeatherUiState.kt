@@ -183,10 +183,46 @@ enum class UiScale(val factor: Float) {
     HUGE(1.45f),
 }
 
+/**
+ * Cada cuánto se refresca la predicción con la app cerrada.
+ *
+ * El orden de declaración es el de la pantalla, de más frecuente a menos, y
+ * puede cambiar sin romper nada: la preferencia se guarda por **nombre** y no
+ * por posición. Se guardaba por posición, y por eso meter "cada 6 horas" en su
+ * sitio habría convertido el "cada 12 horas" de quien ya lo tenía elegido en
+ * "cada 6 horas" al actualizar. `intervalNamed` se encarga de leer las dos
+ * formas; ver [WeatherViewModel].
+ */
 enum class BackgroundInterval(val hours: Long?) {
     OFF(null),
+    EVERY_6H(6),
     EVERY_12H(12),
     EVERY_24H(24),
+}
+
+/**
+ * El intervalo guardado, leyendo las dos formas en que ha podido guardarse.
+ *
+ * Manda el **nombre**. Mientras no lo haya se cae a la posición que escribían
+ * las versiones anteriores a 1.4.5, y esa posición se interpreta con la lista
+ * **de entonces** —apagado, 12 h, 24 h—, que es lo que significaba cuando se
+ * escribió: leerla con la lista de ahora le daría "cada 6 horas" a quien eligió
+ * "cada 12 horas". Un nombre desconocido cae a apagado y no a la primera
+ * opción de la lista, porque no refrescar nunca es la única equivocación que no
+ * gasta batería ni datos a espaldas de nadie.
+ */
+internal fun intervalNamed(name: String?, legacyIndex: Int?): BackgroundInterval {
+    if (name != null) {
+        return BackgroundInterval.entries.firstOrNull { it.name == name }
+            ?: BackgroundInterval.OFF
+    }
+
+    val anteriores = listOf(
+        BackgroundInterval.OFF,
+        BackgroundInterval.EVERY_12H,
+        BackgroundInterval.EVERY_24H,
+    )
+    return legacyIndex?.let { anteriores.getOrNull(it) } ?: BackgroundInterval.OFF
 }
 
 /**

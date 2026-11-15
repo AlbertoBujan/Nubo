@@ -61,6 +61,7 @@
     <string name="background_updates">Background updates</string>
     <string name="background_updates_hint">How often Nubo downloads the forecast without opening the app.</string>
     <string name="interval_off">Off</string>
+    <string name="interval_6h">Every 6 hours</string>
     <string name="interval_12h">Every 12 hours</string>
     <string name="interval_24h">Every 24 hours</string>
     <string name="application">Application</string>
@@ -97,6 +98,7 @@
     <string name="alert_avalanche">Avalanches</string>
     <string name="alert_thaw">Thaw</string>
     <string name="level_yellow">Yellow</string>
+    <string name="alert_badge">%1$s, %2$s</string>
     <string name="level_orange">Orange</string>
     <string name="level_red">Red</string>
 

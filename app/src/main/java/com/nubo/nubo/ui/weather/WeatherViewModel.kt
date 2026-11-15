@@ -105,9 +105,10 @@ class WeatherViewModel(
                 locations = locations,
                 cities = cities,
                 currentIndex = 0,
-                backgroundInterval = BackgroundInterval.entries.getOrElse(
-                    storage.loadBackgroundIntervalIndex(),
-                ) { BackgroundInterval.OFF },
+                backgroundInterval = intervalNamed(
+                    storage.loadBackgroundInterval(),
+                    storage.loadLegacyBackgroundIntervalIndex(),
+                ),
                 alertNotifications = storage.loadAlertNotifications(),
                 units = storage.loadUnits(),
                 uiScale = UiScale.entries.getOrElse(storage.loadUiScaleIndex()) { UiScale.SMALL },
@@ -621,7 +622,7 @@ class WeatherViewModel(
 
     fun setBackgroundInterval(interval: BackgroundInterval) {
         viewModelScope.launch {
-            storage.saveBackgroundIntervalIndex(interval.ordinal)
+            storage.saveBackgroundInterval(interval.name)
             _uiState.update { it.copy(backgroundInterval = interval) }
         }
     }
