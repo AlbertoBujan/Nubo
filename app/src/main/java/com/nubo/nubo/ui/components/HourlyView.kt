@@ -780,6 +780,75 @@ internal fun extendToEdges(points: List<Offset>): List<Offset> {
     }
 }
 
+/**
+ * Los dos tiradores de cada tramo de la curva, para que **fluya** en vez de
+ * escalonarse.
+ *
+ * La temperatura llega redondeada a grados, así que la serie real es una
+ * escalera: cuatro horas a 16° y de golpe 17°. Antes cada tramo se dibujaba
+ * con los tiradores a la altura de sus extremos —una cúbica con la tangente
+ * **horizontal** en cada hora—, y eso convierte la escalera en una escalera
+ * dibujada: un rellano en cada punto y un escalón entre dos. Con dos horas
+ * iguales seguidas salía un tramo completamente plano, y la mitad de la curva
+ * era eso.
+ *
+ * Ahora la pendiente en cada hora es la de sus **vecinas** —un Catmull-Rom,
+ * con el tirador a un tercio del camino—, así que la línea empieza a subir
+ * antes de llegar al escalón y sigue subiendo después: pasa por los mismos
+ * puntos, que es obligatorio porque cada uno lleva su círculo y su etiqueta
+ * encima, pero los une con una sola curva continua.
+ *
+ * Los extremos repiten su propio punto como vecino, que deja el primer y el
+ * último tramo con la pendiente de su única vecina. Ahí no hace falta más:
+ * `extendToEdges` ya ha puesto fuera de la tarjeta los puntos que prolongan
+ * la línea hasta el borde.
+ */
+internal fun curveHandles(points: List<Offset>): List<Pair<Offset, Offset>> {
+    if (points.size < 2) return emptyList()
+    return (0 until points.size - 1).map { i ->
+        val before = points[(i - 1).coerceAtLeast(0)]
+        val from = points[i]
+        val to = points[i + 1]
+        val after = points[(i + 2).coerceAtMost(points.lastIndex)]
+        (from + (to - before) / 6f) to (to - (after - from) / 6f)
+    }
+}
+
+/**
+ * La misma curva, troceada en una polilínea.
+ *
+ * La línea del rocío va **a guiones**, y un guión se reparte recorriendo
+ * tramos rectos: medir sobre una cúbica para saber dónde cae cada uno es
+ * mucho más caro que trocearla y medir sobre los trozos. Con doce por hora,
+ * cada trozo mide menos que un guión, así que la curvatura que se pierde
+ * dentro de uno no se ve.
+ *
+ * La sigue teniendo que atravesar los mismos puntos: cada hora lleva su punto
+ * dibujado encima, y la línea pasa exactamente por ahí porque los extremos de
+ * cada tramo son los propios puntos.
+ */
+internal fun smoothPolyline(points: List<Offset>, perHour: Int = 12): List<Offset> {
+    if (points.size < 2) return points
+    val handles = curveHandles(points)
+    return buildList((points.size - 1) * perHour + 1) {
+        add(points.first())
+        handles.forEachIndexed { i, (first, second) ->
+            val from = points[i]
+            val to = points[i + 1]
+            for (step in 1..perHour) {
+                val t = step / perHour.toFloat()
+                val u = 1f - t
+                add(
+                    from * (u * u * u) +
+                        first * (3f * u * u * t) +
+                        second * (3f * u * t * t) +
+                        to * (t * t * t),
+                )
+            }
+        }
+    }
+}
+
 private fun DrawScope.drawDewCurve(
     measurer: TextMeasurer,
     forecasts: List<HourlyForecast>,
@@ -800,34 +869,46 @@ private fun DrawScope.drawDewCurve(
     val gap = 4.dp.toPx()
     val color = DEW_COLOR.copy(alpha = 0.7f)
 
-    val stroked = extendToEdges(dewPoints)
+    // Curva igual que la de temperatura —ver `curveHandles`—, troceada para
+    // poder repartir los guiones sobre tramos rectos. Iba de punto a punto en
+    // línea recta, y al lado de una curva que fluye los codos de cada hora se
+    // notaban el doble.
+    val stroked = smoothPolyline(extendToEdges(dewPoints))
     fun strokeDashes() {
-    for (i in 0 until stroked.size - 1) {
-        val from = stroked[i]
-        val to = stroked[i + 1]
-        val delta = to - from
-        val length = kotlin.math.hypot(delta.x, delta.y)
-        if (length == 0f) continue
-
-        val unit = Offset(delta.x / length, delta.y / length)
-        var walked = 0f
+        // La fase se **arrastra** de un trozo al siguiente. Reiniciándola en
+        // cada uno saldría un guión por trozo, que con doce por hora es una
+        // línea casi continua; y antes, con un trozo por hora, era un guión
+        // empezando en cada punto.
         var drawing = true
-        while (walked < length) {
-            val step = if (drawing) dash else gap
-            val end = minOf(walked + step, length)
-            if (drawing) {
-                drawLine(
-                    color,
-                    from + unit * walked,
-                    from + unit * end,
-                    1.5f,
-                    cap = StrokeCap.Round,
-                )
+        var pending = dash
+        for (i in 0 until stroked.size - 1) {
+            val from = stroked[i]
+            val to = stroked[i + 1]
+            val delta = to - from
+            val length = kotlin.math.hypot(delta.x, delta.y)
+            if (length == 0f) continue
+
+            val unit = Offset(delta.x / length, delta.y / length)
+            var walked = 0f
+            while (walked < length) {
+                val step = minOf(pending, length - walked)
+                if (drawing) {
+                    drawLine(
+                        color,
+                        from + unit * walked,
+                        from + unit * (walked + step),
+                        1.5f,
+                        cap = StrokeCap.Round,
+                    )
+                }
+                walked += step
+                pending -= step
+                if (pending <= 0.01f) {
+                    drawing = !drawing
+                    pending = if (drawing) dash else gap
+                }
             }
-            walked += step
-            drawing = !drawing
         }
-    }
     }
 
     revealed(revealX) { strokeDashes() }
@@ -862,16 +943,12 @@ private fun DrawScope.drawTemperatureCurve(
     revealX: Float,
     units: Units,
 ) {
-    // Curva suave: cada tramo es una cúbica con los tiradores en el punto medio,
-    // que evita los picos angulosos de unir los puntos con rectas.
     val stroked = extendToEdges(points)
     val path = Path().apply {
         moveTo(stroked.first().x, stroked.first().y)
-        for (i in 0 until stroked.size - 1) {
-            val p0 = stroked[i]
-            val p1 = stroked[i + 1]
-            val midX = (p0.x + p1.x) / 2
-            cubicTo(midX, p0.y, midX, p1.y, p1.x, p1.y)
+        curveHandles(stroked).forEachIndexed { i, (first, second) ->
+            val end = stroked[i + 1]
+            cubicTo(first.x, first.y, second.x, second.y, end.x, end.y)
         }
     }
 

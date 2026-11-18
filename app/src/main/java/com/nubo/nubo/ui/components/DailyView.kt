@@ -424,11 +424,7 @@ private fun DayConditions(
             // saltando de posición según el día que toques. Es el criterio
             // que ya sigue la casilla de calidad del aire, que enseña un
             // guion en vez de desaparecer cuando el modelo no llega.
-            Box(
-                modifier = Modifier
-                    .width(ALERT_COLUMN_WIDTH)
-                    .align(Alignment.CenterVertically),
-            ) {
+            Box(modifier = Modifier.width(ALERT_COLUMN_WIDTH)) {
                 if (alerts.isNotEmpty()) {
                     AlertDots(alerts, onDotCenter = onDotCenter, onDotsGone = onDotsGone)
                 }
@@ -491,10 +487,11 @@ private fun DayConditions(
 /**
  * La columna de discos: un aviso cada uno, lo más grave arriba.
  *
- * El grupo va **centrado** sobre la rejilla —lo centra quien la coloca, con
- * `align`— y no pegado arriba: con un solo aviso el disco cae a la altura de
- * los números en vez de flotar sobre la primera etiqueta, y con cuatro la
- * columna sigue leyéndose como un grupo.
+ * El grupo arranca **arriba del todo**, a la altura de la primera casilla de
+ * la rejilla, y va bajando. Estuvo centrado sobre ella, y entonces el primer
+ * disco caía a una altura distinta en cada día según cuántos avisos hubiera:
+ * la lista se lee de arriba abajo, así que empieza donde empieza lo que hay
+ * al lado.
  */
 @Composable
 private fun AlertDots(
