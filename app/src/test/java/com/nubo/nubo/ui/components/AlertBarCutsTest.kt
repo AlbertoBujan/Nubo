@@ -95,3 +95,91 @@ class AlertBarCutsTest {
         assertTrue(cuts.all { it in 0f..1f })
     }
 }
+
+/**
+ * Qué se pinta **mientras la fila se abre o se cierra**.
+ *
+ * El despliegue mete el contenido desplazado y la tarjeta crece a la vez, así
+ * que a medio camino lo medido todavía no describe dónde van a quedar los
+ * discos: la franja entera se pintaba del color del último aviso hasta que la
+ * animación terminaba. Lo que se promete aquí es que no hay ningún instante
+ * con un solo color, y que al llegar se llega exactamente a lo medido.
+ */
+class AlertBarAnimationTest {
+
+    @Test
+    fun `cerrada reparte a partes iguales`() {
+        val cuts = alertBarCutsAt(listOf(0.7f, 0.8f), count = 3, progress = 0f)
+
+        assertEquals(listOf(1f / 3f, 2f / 3f), cuts)
+    }
+
+    @Test
+    fun `abierta del todo es exactamente lo medido`() {
+        val medido = listOf(0.7f, 0.8f)
+
+        assertEquals(medido, alertBarCutsAt(medido, count = 3, progress = 1f))
+    }
+
+    @Test
+    fun `a medio camino cada tramo sigue teniendo alto`() {
+        // Lo que rompía: a mitad de la animación salía un solo color.
+        val medido = listOf(0.72f, 0.81f, 0.9f)
+
+        for (step in 0..20) {
+            val cuts = alertBarCutsAt(medido, count = 4, progress = step / 20f)
+            val bordes = listOf(0f) + cuts + listOf(1f)
+            bordes.zipWithNext { arriba, abajo ->
+                assertTrue(
+                    "tramo sin alto con progress=${step / 20f}: $cuts",
+                    abajo - arriba > 0.01f,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `los tramos van en orden y dentro de la tarjeta`() {
+        val medido = listOf(0.72f, 0.81f, 0.9f)
+
+        for (step in 0..20) {
+            val cuts = alertBarCutsAt(medido, count = 4, progress = step / 20f)
+            cuts.zipWithNext { arriba, abajo -> assertTrue(abajo > arriba) }
+            cuts.forEach { assertTrue(it > 0f && it < 1f) }
+        }
+    }
+
+    @Test
+    fun `sin medida se reparte a partes iguales aunque esté abierta`() {
+        // La fila cerrada no tiene discos que medir, y el primer fotograma de
+        // la abierta tampoco: ahí manda el reparto, no una lista a medias.
+        assertEquals(listOf(0.5f), alertBarCutsAt(emptyList(), count = 2, progress = 1f))
+        assertEquals(listOf(0.5f), alertBarCutsAt(listOf(0.4f, 0.6f), count = 2, progress = 1f))
+    }
+
+    @Test
+    fun `un solo aviso no tiene fronteras`() {
+        assertTrue(alertBarCutsAt(emptyList(), count = 1, progress = 1f).isEmpty())
+    }
+
+    @Test
+    fun `lo abierta que está sale del alto de la tarjeta`() {
+        // Cabecera de 100 y contenido de 300: la tarjeta va de 100 a 400.
+        assertEquals(0f, alertBarProgress(100f, 100f, 300f), 0.001f)
+        assertEquals(0.5f, alertBarProgress(250f, 100f, 300f), 0.001f)
+        assertEquals(1f, alertBarProgress(400f, 100f, 300f), 0.001f)
+    }
+
+    @Test
+    fun `sin medir nada la fila cuenta como cerrada`() {
+        assertEquals(0f, alertBarProgress(0f, 0f, 0f), 0.001f)
+        assertEquals(0f, alertBarProgress(400f, 100f, 0f), 0.001f)
+    }
+
+    @Test
+    fun `un alto fuera de rango no se sale de la franja`() {
+        // Entre pasadas de colocación puede llegar un alto de más.
+        assertEquals(1f, alertBarProgress(900f, 100f, 300f), 0.001f)
+        assertEquals(0f, alertBarProgress(50f, 100f, 300f), 0.001f)
+    }
+}

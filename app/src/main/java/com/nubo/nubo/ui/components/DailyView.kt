@@ -176,14 +176,25 @@ private fun DailyRow(
     // Las dos medidas se toman respecto a la raíz y se restan: así la resta
     // sigue valiendo mientras la lista se desplaza, porque las dos se vuelven
     // a tomar en la misma pasada de colocación.
-    var cardTopY by remember { mutableFloatStateOf(Float.NaN) }
     var cardHeight by remember { mutableFloatStateOf(0f) }
+    var headerHeight by remember { mutableFloatStateOf(0f) }
+    var contentTopY by remember { mutableFloatStateOf(Float.NaN) }
+    var contentHeight by remember { mutableFloatStateOf(0f) }
     val dotCenters = remember(dayBadges) { mutableStateMapOf<Int, Float>() }
 
+    // Se mide contra la tarjeta **abierta del todo**, no contra la que se ve
+    // en este fotograma. Mientras la fila se abre, el alto crece y el
+    // contenido entra desplazado hacia arriba —así despliega Compose—, así
+    // que los discos caen por encima del borde de la tarjeta de ese instante:
+    // restando contra él, todos los cortes se iban a cero y la franja entera
+    // se pintaba del color del último aviso hasta que la animación terminaba.
+    // El contenido mide siempre lo que va a medir abierto y se desplaza
+    // entero, de modo que la distancia de cada disco a su borde superior no
+    // cambia en toda la animación: es la medida que se busca.
     val barCuts = alertBarCuts(
         dotCenters = dayBadges.indices.map { dotCenters[it] },
-        cardTopY = cardTopY,
-        cardHeight = cardHeight,
+        cardTopY = contentTopY - headerHeight,
+        cardHeight = if (contentHeight > 0f) headerHeight + contentHeight else 0f,
     )
 
     // Los iconos van fuera de la GlassCard, no dentro: la tarjeta recorta su
@@ -200,15 +211,17 @@ private fun DailyRow(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .onGloballyPositioned {
-                        cardTopY = it.positionInRoot().y
-                        cardHeight = it.size.height.toFloat()
-                    },
+                    .onGloballyPositioned { cardHeight = it.size.height.toFloat() },
             ) {
             Column(Modifier.fillMaxWidth().clickable(onClick = onToggle)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // La medida va **antes** del relleno y no después: puesta
+                    // detrás, el nodo que se mide es el de dentro y el alto
+                    // vuelve sin los 24 dp de margen, que es justo lo que
+                    // descuadraba la franja al terminar de abrirse.
+                    .onGloballyPositioned { headerHeight = it.size.height.toFloat() }
                     // Los márgenes de esta fila están apretados a conciencia:
                     // todo lo que se recorta aquí se lo lleva la barra, que es
                     // lo único que crece con el dato y lo único que se compara
@@ -312,13 +325,20 @@ private fun DailyRow(
             }
 
             AnimatedVisibility(expanded) {
-                DayConditions(
-                    forecast = forecast,
-                    airQuality = airQuality,
-                    alerts = dayBadges,
-                    onDotCenter = { index, y -> dotCenters[index] = y },
-                    onDotsGone = dotCenters::clear,
-                )
+                Box(
+                    Modifier.onGloballyPositioned {
+                        contentTopY = it.positionInRoot().y
+                        contentHeight = it.size.height.toFloat()
+                    },
+                ) {
+                    DayConditions(
+                        forecast = forecast,
+                        airQuality = airQuality,
+                        alerts = dayBadges,
+                        onDotCenter = { index, y -> dotCenters[index] = y },
+                        onDotsGone = dotCenters::clear,
+                    )
+                }
             }
             }
 
@@ -328,16 +348,15 @@ private fun DailyRow(
             // tarjeta, que es lo que le da la curva de la esquina.
             if (dayBadges.isNotEmpty()) {
                 val barWidth = ALERT_BAR_WIDTH
+                // Cerrada no hay discos que medir, y a partes iguales es lo
+                // que la fila quiere decir ahí: cuántos avisos hay y de qué
+                // nivel. Abierta manda lo medido, y entre las dos se
+                // interpola con lo abierta que esté, que es lo que evita el
+                // tirón al acabar la animación.
+                val openness = alertBarProgress(cardHeight, headerHeight, contentHeight)
+                val cuts = alertBarCutsAt(barCuts, dayBadges.size, openness)
                 Canvas(Modifier.matchParentSize()) {
                     val width = barWidth.toPx()
-                    val cuts = if (barCuts.size == dayBadges.size - 1) {
-                        barCuts
-                    } else {
-                        // Cerrada no hay discos que medir, y a partes iguales
-                        // es lo que la fila quiere decir ahí: cuántos avisos
-                        // hay y de qué nivel.
-                        List(dayBadges.size - 1) { (it + 1f) / dayBadges.size }
-                    }
                     var top = 0f
                     cuts.forEachIndexed { index, cut ->
                         val bottom = (cut * size.height).coerceIn(top, size.height)
@@ -535,7 +554,11 @@ private fun AlertDots(
  *
  * Las posiciones llegan **respecto a la raíz** y se restan contra el borde de
  * la tarjeta, porque las dos se vuelven a tomar en la misma pasada de
- * colocación y así la resta no se descuadra al desplazar la lista.
+ * colocación y así la resta no se descuadra al desplazar la lista. Ese borde
+ * es el de la tarjeta **abierta del todo**, no el de la que se está viendo
+ * mientras se abre: a medio camino el contenido todavía no está donde va a
+ * estar, y medir contra el borde de ese instante devolvía cortes sin sentido
+ * —todos a cero— durante toda la animación.
  */
 internal fun alertBarCuts(
     dotCenters: List<Float?>,
@@ -547,6 +570,49 @@ internal fun alertBarCuts(
     return centers
         .zipWithNext { above, below -> ((above + below) / 2f - cardTopY) / cardHeight }
         .map { it.coerceIn(0f, 1f) }
+}
+
+/**
+ * Cuánto está abierta la fila, de 0 —cerrada— a 1 —abierta del todo.
+ *
+ * Sale del alto de la tarjeta, que es lo que la animación hace crecer, y no de
+ * un reloj aparte: así la franja va exactamente al paso de lo que se ve, sin
+ * tener que conocer ni la duración ni la curva del despliegue.
+ */
+internal fun alertBarProgress(
+    cardHeight: Float,
+    headerHeight: Float,
+    contentHeight: Float,
+): Float {
+    if (cardHeight <= 0f || headerHeight <= 0f || contentHeight <= 0f) return 0f
+    return ((cardHeight - headerHeight) / contentHeight).coerceIn(0f, 1f)
+}
+
+/**
+ * Los cortes que se pintan **en este fotograma**.
+ *
+ * Cerrada, la franja se reparte a partes iguales; abierta, manda lo medido.
+ * Entre las dos hay una animación, y durante ella no vale ninguna de las dos
+ * cosas: lo medido todavía no describe nada —los discos están entrando— y
+ * quedarse en el reparto hasta el final da un tirón al llegar. Se interpolan
+ * con [alertBarProgress], que es el propio crecimiento de la tarjeta, así que
+ * cada color va deslizándose hasta la altura de su disco a la vez que el
+ * disco aparece.
+ *
+ * Sin medida —la fila cerrada, o el primer fotograma— se devuelve el reparto a
+ * partes iguales, que es lo que la fila quiere decir ahí: cuántos avisos hay y
+ * de qué nivel.
+ */
+internal fun alertBarCutsAt(
+    measured: List<Float>,
+    count: Int,
+    progress: Float,
+): List<Float> {
+    if (count < 2) return emptyList()
+    val even = List(count - 1) { (it + 1f) / count }
+    if (measured.size != even.size) return even
+    val openness = progress.coerceIn(0f, 1f)
+    return even.zip(measured) { equal, exact -> equal + (exact - equal) * openness }
 }
 
 /**
